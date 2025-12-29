@@ -7,9 +7,9 @@ export async function middleware(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your_supabase_project_url') {
-    // Supabase not configured, allow all requests but redirect auth routes to home
+    // Supabase not configured, allow all requests but redirect protected routes to home
     const { pathname } = request.nextUrl
-    if (pathname.startsWith('/moderation')) {
+    if (pathname.startsWith('/moderation') || pathname.startsWith('/admin')) {
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)
@@ -53,12 +53,16 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Protected routes that require authentication
-  const protectedRoutes = ['/submit', '/profile', '/moderation']
+  const protectedRoutes = ['/submit', '/profile', '/moderation', '/admin']
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
   // Moderation routes require moderator or admin role
   const moderatorRoutes = ['/moderation']
   const isModeratorRoute = moderatorRoutes.some(route => pathname.startsWith(route))
+
+  // Admin routes require admin role only
+  const adminRoutes = ['/admin']
+  const isAdminRoute = adminRoutes.some(route => pathname.startsWith(route))
 
   // Auth routes (login/signup) - redirect to home if already logged in
   const authRoutes = ['/auth/login', '/auth/signup']
@@ -82,6 +86,22 @@ export async function middleware(request: NextRequest) {
 
     if (!profile || (profile.role !== 'moderator' && profile.role !== 'admin')) {
       // Redirect to home if not a moderator/admin
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  if (isAdminRoute && user) {
+    // Check if user has admin role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile || profile.role !== 'admin') {
+      // Redirect to home if not an admin
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)

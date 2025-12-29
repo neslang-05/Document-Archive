@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type UserRole = "guest" | "user" | "moderator"
+export type UserRole = "guest" | "user" | "moderator" | "admin"
 
 export type ResourceCategory = "question_paper" | "notes" | "lab_manual" | "project_report"
 

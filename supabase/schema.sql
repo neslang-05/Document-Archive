@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ENUMS
 -- ============================================
 
-CREATE TYPE user_role AS ENUM ('guest', 'user', 'moderator');
+CREATE TYPE user_role AS ENUM ('guest', 'user', 'moderator', 'admin');
 CREATE TYPE resource_category AS ENUM ('question_paper', 'notes', 'lab_manual', 'project_report');
 CREATE TYPE exam_type AS ENUM ('mid_term', 'end_term', 'quiz', 'assignment', 'other');
 CREATE TYPE submission_status AS ENUM ('pending', 'approved', 'rejected');
@@ -246,26 +246,34 @@ CREATE POLICY "Departments are viewable by everyone"
     ON departments FOR SELECT
     USING (true);
 
-CREATE POLICY "Only moderators can insert departments"
+CREATE POLICY "Only moderators and admins can insert departments"
     ON departments FOR INSERT
-    WITH CHECK (get_user_role(auth.uid()) = 'moderator');
+    WITH CHECK (get_user_role(auth.uid()) IN ('moderator', 'admin'));
 
-CREATE POLICY "Only moderators can update departments"
+CREATE POLICY "Only moderators and admins can update departments"
     ON departments FOR UPDATE
-    USING (get_user_role(auth.uid()) = 'moderator');
+    USING (get_user_role(auth.uid()) IN ('moderator', 'admin'));
+
+CREATE POLICY "Only admins can delete departments"
+    ON departments FOR DELETE
+    USING (get_user_role(auth.uid()) = 'admin');
 
 -- Courses policies
 CREATE POLICY "Courses are viewable by everyone"
     ON courses FOR SELECT
     USING (true);
 
-CREATE POLICY "Only moderators can insert courses"
+CREATE POLICY "Only moderators and admins can insert courses"
     ON courses FOR INSERT
-    WITH CHECK (get_user_role(auth.uid()) = 'moderator');
+    WITH CHECK (get_user_role(auth.uid()) IN ('moderator', 'admin'));
 
-CREATE POLICY "Only moderators can update courses"
+CREATE POLICY "Only moderators and admins can update courses"
     ON courses FOR UPDATE
-    USING (get_user_role(auth.uid()) = 'moderator');
+    USING (get_user_role(auth.uid()) IN ('moderator', 'admin'));
+
+CREATE POLICY "Only admins can delete courses"
+    ON courses FOR DELETE
+    USING (get_user_role(auth.uid()) = 'admin');
 
 -- Resources policies
 CREATE POLICY "Approved resources are viewable by everyone"

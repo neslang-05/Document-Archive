@@ -116,6 +116,19 @@ export function Header({ user }: HeaderProps) {
                 Moderation
               </Link>
             )}
+            {user?.role === "admin" && (
+              <Link
+                href="/admin"
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  pathname === "/admin"
+                    ? "bg-white/10 text-white"
+                    : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <Settings className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -271,6 +284,20 @@ export function Header({ user }: HeaderProps) {
               >
                 <Users className="h-4 w-4" />
                 Moderation
+              </Link>
+            )}
+            {user?.role === "admin" && (
+              <Link
+                href="/admin"
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  pathname === "/admin"
+                    ? "bg-white/10 text-white"
+                    : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Settings className="h-4 w-4" />
+                Admin
               </Link>
             )}
             {user && (
