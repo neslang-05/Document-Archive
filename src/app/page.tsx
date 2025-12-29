@@ -16,78 +16,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-
-// Mock data for demonstration
-const stats = [
-  { label: "Resources", value: "2,500+", icon: FileText },
-  { label: "Downloads", value: "50,000+", icon: Download },
-  { label: "Contributors", value: "150+", icon: Users },
-  { label: "Courses", value: "80+", icon: BookOpen },
-]
-
-const featuredCourses = [
-  {
-    code: "CS3522",
-    name: "Database Management Systems",
-    semester: 5,
-    resourceCount: 45,
-    department: "CSE",
-  },
-  {
-    code: "CS3524",
-    name: "Artificial Intelligence",
-    semester: 5,
-    resourceCount: 38,
-    department: "CSE",
-  },
-  {
-    code: "CS3638",
-    name: "Design and Analysis of Algorithms",
-    semester: 6,
-    resourceCount: 52,
-    department: "CSE",
-  },
-  {
-    code: "CS4748",
-    name: "Cryptography and Network Security",
-    semester: 7,
-    resourceCount: 28,
-    department: "CSE",
-  },
-]
-
-const recentResources = [
-  {
-    id: "1",
-    title: "DBMS End-Term 2024",
-    course: "CS3522",
-    category: "question_paper",
-    examType: "end_term",
-    year: 2024,
-    downloads: 234,
-    rating: 4.5,
-  },
-  {
-    id: "2",
-    title: "AI Complete Notes",
-    course: "CS3524",
-    category: "notes",
-    examType: null,
-    year: 2024,
-    downloads: 189,
-    rating: 4.8,
-  },
-  {
-    id: "3",
-    title: "OS Lab Manual",
-    course: "CS3636",
-    category: "lab_manual",
-    examType: null,
-    year: 2024,
-    downloads: 156,
-    rating: 4.3,
-  },
-]
+import { createClient } from "@/lib/supabase/server"
+import { formatNumber } from "@/lib/utils"
 
 const categoryColors: Record<string, string> = {
   question_paper: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
@@ -103,7 +33,68 @@ const categoryLabels: Record<string, string> = {
   project_report: "Project Report",
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient()
+
+  // Fetch stats
+  const [
+    { count: resourceCount },
+    { data: downloadData },
+    { count: userCount },
+    { count: courseCount }
+  ] = await Promise.all([
+    supabase.from('resources').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
+    supabase.from('resources').select('download_count').eq('status', 'approved'),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }),
+    supabase.from('courses').select('*', { count: 'exact', head: true })
+  ])
+
+  const totalDownloads = downloadData?.reduce((sum, item) => sum + (item.download_count || 0), 0) || 0
+
+  const stats = [
+    { label: "Resources", value: formatNumber(resourceCount || 0), icon: FileText },
+    { label: "Downloads", value: formatNumber(totalDownloads), icon: Download },
+    { label: "Users", value: formatNumber(userCount || 0), icon: Users },
+    { label: "Courses", value: formatNumber(courseCount || 0), icon: BookOpen },
+  ]
+
+  // Fetch recent resources
+  const { data: recentResources } = await supabase
+    .from('resources')
+    .select(`
+      *,
+      courses (
+        code,
+        name
+      )
+    `)
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false })
+    .limit(3)
+
+  // Fetch some courses for "Popular Courses" (just picking first 4 for now as we don't have popularity metric yet)
+  // In a real app, we would probably have a view or a column for resource count on the course table
+  const { data: courses } = await supabase
+    .from('courses')
+    .select('*')
+    .limit(4)
+
+  // Fetch resource counts for these courses
+  const coursesWithCounts = await Promise.all(
+    (courses || []).map(async (course) => {
+      const { count } = await supabase
+        .from('resources')
+        .select('*', { count: 'exact', head: true })
+        .eq('course_id', course.id)
+        .eq('status', 'approved')
+      
+      return {
+        ...course,
+        resourceCount: count || 0
+      }
+    })
+  )
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -123,9 +114,10 @@ export default function HomePage() {
             
             {/* Search Bar */}
             <div className="mx-auto mt-8 max-w-xl">
-              <form className="relative">
+              <form className="relative" action="/search">
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  name="q"
                   type="search"
                   placeholder="Search for courses, resources, question papers..."
                   className="h-12 pl-12 pr-4 text-foreground bg-white shadow-lg"
@@ -185,8 +177,8 @@ export default function HomePage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {featuredCourses.map((course) => (
-                <Link key={course.code} href={`/courses/${course.code}`}>
+              {coursesWithCounts.map((course) => (
+                <Link key={course.code} href={`/courses/${course.id}`}>
                   <Card className="h-full hover:border-primary/50 transition-colors">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
@@ -195,7 +187,7 @@ export default function HomePage() {
                         </span>
                         <Badge variant="secondary">Sem {course.semester}</Badge>
                       </div>
-                      <CardTitle className="text-lg mt-2">{course.name}</CardTitle>
+                      <CardTitle className="text-lg mt-2 line-clamp-2">{course.name}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -234,7 +226,7 @@ export default function HomePage() {
             </div>
 
             <div className="grid gap-4">
-              {recentResources.map((resource) => (
+              {recentResources?.map((resource) => (
                 <Link key={resource.id} href={`/resources/${resource.id}`}>
                   <Card className="hover:border-primary/50 transition-colors">
                     <CardContent className="flex items-center justify-between p-4">
@@ -246,7 +238,7 @@ export default function HomePage() {
                           <h3 className="font-medium">{resource.title}</h3>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="font-mono text-xs text-muted-foreground">
-                              {resource.course}
+                              {resource.courses?.code}
                             </span>
                             <Badge 
                               variant="secondary" 
@@ -263,17 +255,22 @@ export default function HomePage() {
                       <div className="flex items-center gap-6 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Download className="h-4 w-4" />
-                          {resource.downloads}
+                          {resource.download_count}
                         </span>
                         <span className="flex items-center gap-1">
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          {resource.rating}
+                          {resource.average_rating?.toFixed(1) || "0.0"}
                         </span>
                       </div>
                     </CardContent>
                   </Card>
                 </Link>
               ))}
+              {(!recentResources || recentResources.length === 0) && (
+                <div className="text-center py-12 text-muted-foreground">
+                  No resources uploaded yet. Be the first to contribute!
+                </div>
+              )}
             </div>
           </div>
         </section>

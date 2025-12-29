@@ -53,7 +53,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Protected routes that require authentication
-  const protectedRoutes = ['/submit', '/profile', '/moderation', '/admin']
+  const protectedRoutes = ['/submit', '/profile', '/moderation', '/admin', '/dashboard']
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
   // Moderation routes require moderator or admin role

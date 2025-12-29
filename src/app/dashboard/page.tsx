@@ -1,0 +1,127 @@
+import { createClient } from "@/lib/supabase/server"
+import { redirect } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { FileText, Download, Bookmark, Star, Clock } from "lucide-react"
+import { formatNumber, formatDate } from "@/lib/utils"
+import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
+
+export default async function DashboardPage() {
+  const supabase = await createClient()
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    redirect("/auth/login")
+  }
+
+  // Fetch user stats
+  const [
+    { count: uploadCount },
+    { data: uploads },
+    { count: bookmarkCount },
+    { data: recentActivity } // We don't have an activity table yet, so we'll simulate or just show recent uploads/bookmarks
+  ] = await Promise.all([
+    supabase.from('resources').select('*', { count: 'exact', head: true }).eq('uploader_id', user.id),
+    supabase.from('resources').select('download_count').eq('uploader_id', user.id),
+    supabase.from('bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    // For activity, we can fetch recent uploads and bookmarks and merge them
+    Promise.resolve({ data: [] }) 
+  ])
+
+  const totalDownloads = uploads?.reduce((sum, item) => sum + (item.download_count || 0), 0) || 0
+
+  // Fetch recent uploads for activity list
+  const { data: recentUploads } = await supabase
+    .from('resources')
+    .select('id, title, created_at, status')
+    .eq('uploader_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  return (
+    <div className="p-6 space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard Overview</h1>
+        <p className="text-muted-foreground">
+          Welcome back! Here's what's happening with your contributions.
+        </p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Uploads</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatNumber(uploadCount || 0)}</div>
+            <p className="text-xs text-muted-foreground">
+              Resources contributed
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Downloads</CardTitle>
+            <Download className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatNumber(totalDownloads)}</div>
+            <p className="text-xs text-muted-foreground">
+              Across all your uploads
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Bookmarks</CardTitle>
+            <Bookmark className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatNumber(bookmarkCount || 0)}</div>
+            <p className="text-xs text-muted-foreground">
+              Saved resources
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Recent Uploads</h2>
+        <div className="rounded-md border">
+          {recentUploads && recentUploads.length > 0 ? (
+            <div className="divide-y">
+              {recentUploads.map((upload) => (
+                <div key={upload.id} className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                      <Upload className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {upload.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Uploaded on {formatDate(upload.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant={upload.status === 'approved' ? 'default' : 'secondary'}>
+                    {upload.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-muted-foreground">
+              No uploads yet. <Link href="/submit" className="text-primary hover:underline">Upload your first resource</Link>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
