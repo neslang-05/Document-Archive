@@ -169,17 +169,27 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO profiles (id, email, full_name, avatar_url, role)
+    INSERT INTO public.profiles (id, email, full_name, avatar_url, role)
     VALUES (
         NEW.id,
         NEW.email,
-        NEW.raw_user_meta_data->>'full_name',
+        COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
         NEW.raw_user_meta_data->>'avatar_url',
         'user'
-    );
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name),
+        avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url),
+        updated_at = NOW();
     RETURN NEW;
+EXCEPTION
+    WHEN others THEN
+        -- Log error but don't fail the signup
+        RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
+        RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -240,6 +250,10 @@ CREATE POLICY "Public profiles are viewable by everyone"
 CREATE POLICY "Users can update own profile"
     ON profiles FOR UPDATE
     USING (auth.uid() = id);
+
+CREATE POLICY "Service role can insert profiles"
+    ON profiles FOR INSERT
+    WITH CHECK (true);
 
 -- Departments policies
 CREATE POLICY "Departments are viewable by everyone"
