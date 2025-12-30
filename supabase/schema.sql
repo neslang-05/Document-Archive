@@ -249,7 +249,10 @@ CREATE POLICY "Public profiles are viewable by everyone"
 
 CREATE POLICY "Users can update own profile"
     ON profiles FOR UPDATE
-    USING (auth.uid() = id);
+    USING (
+        auth.uid() = id 
+        OR get_user_role(auth.uid()) = 'admin'
+    );
 
 CREATE POLICY "Service role can insert profiles"
     ON profiles FOR INSERT
@@ -295,7 +298,7 @@ CREATE POLICY "Approved resources are viewable by everyone"
     USING (
         status = 'approved' 
         OR uploader_id = auth.uid() 
-        OR get_user_role(auth.uid()) = 'moderator'
+        OR get_user_role(auth.uid()) IN ('moderator', 'admin')
     );
 
 CREATE POLICY "Authenticated users can insert resources"
@@ -306,14 +309,14 @@ CREATE POLICY "Users can update own pending resources"
     ON resources FOR UPDATE
     USING (
         (uploader_id = auth.uid() AND status = 'pending')
-        OR get_user_role(auth.uid()) = 'moderator'
+        OR get_user_role(auth.uid()) IN ('moderator', 'admin')
     );
 
 CREATE POLICY "Users can delete own pending resources"
     ON resources FOR DELETE
     USING (
         (uploader_id = auth.uid() AND status = 'pending')
-        OR get_user_role(auth.uid()) = 'moderator'
+        OR get_user_role(auth.uid()) IN ('moderator', 'admin')
     );
 
 -- Ratings policies

@@ -1,101 +1,21 @@
-"use client"
-
-import { useState } from "react"
+import { createClient } from "@/lib/supabase/server"
+import { redirect } from "next/navigation"
 import Link from "next/link"
 import { 
   Shield, 
   FileText, 
   Check, 
-  X, 
-  Eye, 
-  Download,
   Clock,
   User,
-  Filter,
-  Search,
-  ChevronDown,
-  AlertTriangle,
   ExternalLink
 } from "lucide-react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Breadcrumbs } from "@/components/layout/breadcrumbs"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
 import { formatDate } from "@/lib/utils"
-
-// Mock data for pending submissions
-const mockSubmissions = [
-  {
-    id: "1",
-    title: "DBMS End-Term Question Paper 2024",
-    course: { code: "CS3522", name: "Database Management Systems" },
-    category: "question_paper",
-    examType: "end_term",
-    year: 2024,
-    uploader: { name: "John Doe", email: "john@mtu.ac.in" },
-    fileUrl: "#",
-    fileName: "CS3522_EndTerm_2024.pdf",
-    fileSize: 2456789,
-    submittedAt: "2024-12-28T10:30:00Z",
-    status: "pending",
-  },
-  {
-    id: "2",
-    title: "AI Complete Notes - Unit 1-5",
-    course: { code: "CS3524", name: "Artificial Intelligence" },
-    category: "notes",
-    examType: null,
-    year: 2024,
-    uploader: { name: "Jane Smith", email: "jane@mtu.ac.in" },
-    fileUrl: "#",
-    fileName: "AI_Notes_Complete.pdf",
-    fileSize: 5678901,
-    submittedAt: "2024-12-27T15:45:00Z",
-    status: "pending",
-  },
-  {
-    id: "3",
-    title: "Operating Systems Lab Manual",
-    course: { code: "CS3637", name: "Operating Systems Laboratory" },
-    category: "lab_manual",
-    examType: null,
-    year: 2024,
-    uploader: { name: "Mike Johnson", email: "mike@mtu.ac.in" },
-    fileUrl: "#",
-    fileName: "OS_Lab_Manual_2024.pdf",
-    fileSize: 3456789,
-    submittedAt: "2024-12-26T09:15:00Z",
-    status: "pending",
-  },
-  {
-    id: "4",
-    title: "CNS Mid-Term 2024",
-    course: { code: "CS4748", name: "Cryptography and Network Security" },
-    category: "question_paper",
-    examType: "mid_term",
-    year: 2024,
-    uploader: { name: "Sarah Williams", email: "sarah@mtu.ac.in" },
-    fileUrl: "#",
-    fileName: "CNS_MidTerm_2024.pdf",
-    fileSize: 1234567,
-    submittedAt: "2024-12-25T14:20:00Z",
-    status: "pending",
-  },
-]
+import { ModerationActions } from "./moderation-actions"
 
 const categoryLabels: Record<string, string> = {
   question_paper: "Question Paper",
@@ -119,42 +39,76 @@ const categoryColors: Record<string, string> = {
   project_report: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
 }
 
-export default function ModerationPage() {
-  const [submissions, setSubmissions] = useState(mockSubmissions)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedSubmission, setSelectedSubmission] = useState<typeof mockSubmissions[0] | null>(null)
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
-  const [rejectionReason, setRejectionReason] = useState("")
-  const [activeTab, setActiveTab] = useState("pending")
+export default async function ModerationPage() {
+  const supabase = await createClient()
 
-  const pendingCount = submissions.filter((s) => s.status === "pending").length
+  // Check if user is logged in
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    redirect("/auth/login")
+  }
 
-  const filteredSubmissions = submissions.filter((submission) => {
-    const matchesSearch =
-      submission.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      submission.course.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      submission.uploader.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesTab = activeTab === "all" || submission.status === activeTab
-    return matchesSearch && matchesTab
+  // Check if user has moderator or admin role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile || !["moderator", "admin"].includes(profile.role)) {
+    redirect("/dashboard")
+  }
+
+  // Fetch pending submissions
+  const { data: pendingSubmissions, error: pendingError } = await supabase
+    .from("resources")
+    .select(`
+      *,
+      courses (code, name),
+      uploader:profiles!resources_uploader_id_fkey (full_name, email)
+    `)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+
+  // Log any errors for debugging
+  if (pendingError) {
+    console.error("Error fetching pending submissions:", pendingError)
+  }
+
+  // Fetch recently reviewed (last 20)
+  const { data: recentlyReviewed, error: reviewedError } = await supabase
+    .from("resources")
+    .select(`
+      *,
+      courses (code, name),
+      uploader:profiles!resources_uploader_id_fkey (full_name, email)
+    `)
+    .in("status", ["approved", "rejected"])
+    .order("approved_at", { ascending: false })
+    .limit(20)
+
+  if (reviewedError) {
+    console.error("Error fetching reviewed submissions:", reviewedError)
+  }
+
+  // Fetch files for all pending submissions
+  const pendingIds = pendingSubmissions?.map(s => s.id) || []
+  const { data: allFiles } = await supabase
+    .from("resource_files")
+    .select("*")
+    .in("resource_id", pendingIds)
+    .order("file_order")
+
+  // Create a map of resource_id to files
+  const filesMap = new Map<string, any[]>()
+  allFiles?.forEach(file => {
+    if (!filesMap.has(file.resource_id)) {
+      filesMap.set(file.resource_id, [])
+    }
+    filesMap.get(file.resource_id)!.push(file)
   })
 
-  const handleApprove = (id: string) => {
-    setSubmissions((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status: "approved" } : s))
-    )
-    setSelectedSubmission(null)
-  }
-
-  const handleReject = () => {
-    if (selectedSubmission && rejectionReason.trim()) {
-      setSubmissions((prev) =>
-        prev.map((s) => (s.id === selectedSubmission.id ? { ...s, status: "rejected" } : s))
-      )
-      setRejectDialogOpen(false)
-      setSelectedSubmission(null)
-      setRejectionReason("")
-    }
-  }
+  const pendingCount = pendingSubmissions?.length || 0
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + " B"
@@ -164,349 +118,203 @@ export default function ModerationPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header user={{ id: "1", email: "moderator@mtu.ac.in", full_name: "Moderator", role: "moderator" }} />
+      <Header />
       
       <main className="flex-1 p-6">
-        <div className="container mx-auto">
+        <div className="container mx-auto max-w-5xl">
           <Breadcrumbs
-            items={[{ label: "Moderation Queue" }]}
+            items={[{ label: "Moderation" }]}
             className="mb-6"
           />
 
           {/* Header */}
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+          <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <Shield className="h-6 w-6 text-primary" />
                 Moderation Queue
               </h1>
               <p className="text-muted-foreground mt-1">
-                Review and manage pending submissions
+                Review and approve community submissions
               </p>
             </div>
-
-            {/* Search */}
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search submissions..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+            <Badge variant="secondary" className="text-lg px-3 py-1">
+              {pendingCount} pending
+            </Badge>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid gap-4 md:grid-cols-4 mb-6">
-            <Card>
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
-                  <Clock className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{pendingCount}</p>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
-                  <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">
-                    {submissions.filter((s) => s.status === "approved").length}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Approved Today</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
-                  <X className="h-6 w-6 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">
-                    {submissions.filter((s) => s.status === "rejected").length}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Rejected Today</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                  <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{submissions.length}</p>
-                  <p className="text-sm text-muted-foreground">Total Today</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="pending" className="gap-2">
-                <Clock className="h-4 w-4" />
-                Pending
-                {pendingCount > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {pendingCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="approved" className="gap-2">
-                <Check className="h-4 w-4" />
-                Approved
-              </TabsTrigger>
-              <TabsTrigger value="rejected" className="gap-2">
-                <X className="h-4 w-4" />
-                Rejected
-              </TabsTrigger>
-              <TabsTrigger value="all">All</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value={activeTab} className="space-y-4">
-              {filteredSubmissions.length === 0 ? (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold">No submissions found</h3>
-                    <p className="text-muted-foreground">
-                      {activeTab === "pending"
-                        ? "All caught up! No pending submissions to review."
-                        : "No submissions match your search criteria."}
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-4">
-                  {filteredSubmissions.map((submission) => (
-                    <Card key={submission.id} className="overflow-hidden">
-                      <CardContent className="p-0">
-                        <div className="flex flex-col lg:flex-row">
-                          {/* Main Content */}
-                          <div className="flex-1 p-4">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">
-                                    {submission.course.code}
-                                  </span>
-                                  <Badge
-                                    variant="secondary"
-                                    className={categoryColors[submission.category]}
-                                  >
-                                    {categoryLabels[submission.category]}
-                                  </Badge>
-                                  {submission.examType && (
-                                    <Badge variant="outline">
-                                      {examTypeLabels[submission.examType]}
-                                    </Badge>
-                                  )}
-                                  <span className="font-mono text-xs text-muted-foreground">
-                                    {submission.year}
-                                  </span>
-                                </div>
-                                <h3 className="font-semibold text-lg">{submission.title}</h3>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {submission.course.name}
-                                </p>
-                              </div>
-                              <Badge
-                                variant={
-                                  submission.status === "pending"
-                                    ? "pending"
-                                    : submission.status === "approved"
-                                    ? "approved"
-                                    : "rejected"
-                                }
-                              >
-                                {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
-                              </Badge>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-4 mt-4 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <User className="h-4 w-4" />
-                                {submission.uploader.name}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-4 w-4" />
-                                {formatDate(submission.submittedAt)}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <FileText className="h-4 w-4" />
-                                {submission.fileName} ({formatFileSize(submission.fileSize)})
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Actions */}
-                          {submission.status === "pending" && (
-                            <div className="flex lg:flex-col items-center gap-2 p-4 lg:border-l bg-muted/30">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-1"
-                                onClick={() => setSelectedSubmission(submission)}
-                              >
-                                <Eye className="h-4 w-4" />
-                                Preview
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="gap-1 bg-green-600 hover:bg-green-700"
-                                onClick={() => handleApprove(submission.id)}
-                              >
-                                <Check className="h-4 w-4" />
-                                Approve
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="gap-1"
-                                onClick={() => {
-                                  setSelectedSubmission(submission)
-                                  setRejectDialogOpen(true)
-                                }}
-                              >
-                                <X className="h-4 w-4" />
-                                Reject
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-
-      {/* Preview Dialog */}
-      <Dialog open={!!selectedSubmission && !rejectDialogOpen} onOpenChange={() => setSelectedSubmission(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Preview Submission</DialogTitle>
-            <DialogDescription>
-              Review the submission details before approving or rejecting
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedSubmission && (
-            <div className="space-y-4">
-              <div className="rounded-lg border p-4 space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Title</span>
-                  <span className="font-medium">{selectedSubmission.title}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Course</span>
-                  <span className="font-mono">{selectedSubmission.course.code}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Type</span>
-                  <span>{categoryLabels[selectedSubmission.category]}</span>
-                </div>
-                {selectedSubmission.examType && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Exam Type</span>
-                    <span>{examTypeLabels[selectedSubmission.examType]}</span>
+          {/* Show errors if any */}
+          {(pendingError || reviewedError) && (
+            <Card className="mb-8 border-destructive">
+              <CardHeader>
+                <CardTitle className="text-destructive">Error Loading Data</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {pendingError && (
+                  <div className="mb-2">
+                    <p className="font-medium">Pending submissions error:</p>
+                    <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
+                      {JSON.stringify(pendingError, null, 2)}
+                    </pre>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Year</span>
-                  <span className="font-mono">{selectedSubmission.year}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Uploaded by</span>
-                  <span>{selectedSubmission.uploader.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">File</span>
-                  <span>{selectedSubmission.fileName}</span>
-                </div>
-              </div>
-
-              <div className="flex justify-center">
-                <Button variant="outline" className="gap-2">
-                  <Download className="h-4 w-4" />
-                  Download File
-                </Button>
-              </div>
-            </div>
+                {reviewedError && (
+                  <div>
+                    <p className="font-medium">Recently reviewed error:</p>
+                    <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
+                      {JSON.stringify(reviewedError, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                <p className="mt-4 text-sm text-muted-foreground">
+                  This usually means RLS policies need to be updated. Please run the fix-resources-rls.sql file in your Supabase SQL Editor.
+                </p>
+              </CardContent>
+            </Card>
           )}
 
-          <DialogFooter className="gap-2">
-            <Button
-              variant="destructive"
-              onClick={() => setRejectDialogOpen(true)}
-            >
-              <X className="h-4 w-4 mr-2" />
-              Reject
-            </Button>
-            <Button
-              className="bg-green-600 hover:bg-green-700"
-              onClick={() => selectedSubmission && handleApprove(selectedSubmission.id)}
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Approve
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {/* Pending Submissions */}
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Pending Review
+              </CardTitle>
+              <CardDescription>
+                These submissions are waiting for your review
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {pendingSubmissions && pendingSubmissions.length > 0 ? (
+                <div className="space-y-4">
+                  {pendingSubmissions.map((submission) => (
+                    <div
+                      key={submission.id}
+                      className="border rounded-lg p-4 hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant="secondary"
+                              className={categoryColors[submission.category]}
+                            >
+                              {categoryLabels[submission.category]}
+                            </Badge>
+                            {submission.exam_type && (
+                              <Badge variant="outline">
+                                {examTypeLabels[submission.exam_type]}
+                              </Badge>
+                            )}
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {submission.year}
+                            </span>
+                          </div>
 
-      {/* Reject Dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Reject Submission
-            </DialogTitle>
-            <DialogDescription>
-              Please provide a reason for rejection. This will be sent to the uploader.
-            </DialogDescription>
-          </DialogHeader>
+                          <h3 className="font-semibold text-lg">{submission.title}</h3>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="reason">Rejection Reason *</Label>
-              <Textarea
-                id="reason"
-                placeholder="e.g., Low quality scan, incorrect course assignment, duplicate submission..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                rows={4}
-              />
-            </div>
-          </div>
+                          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <FileText className="h-4 w-4" />
+                              <span className="font-mono">{submission.courses?.code}</span>
+                              {" - "}
+                              {submission.courses?.name}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <User className="h-4 w-4" />
+                              {submission.uploader?.full_name || submission.uploader?.email || "Unknown"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-4 w-4" />
+                              {formatDate(submission.created_at)}
+                            </span>
+                          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleReject}
-              disabled={!rejectionReason.trim()}
-            >
-              Confirm Rejection
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="text-muted-foreground">
+                              {submission.file_name} ({formatFileSize(submission.file_size)})
+                            </span>
+                            <a
+                              href={submission.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-primary hover:underline"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              Preview file
+                            </a>
+                          </div>
+
+                          {submission.description && (
+                            <p className="text-sm text-muted-foreground border-l-2 pl-3 mt-2">
+                              {submission.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <ModerationActions 
+                          resourceId={submission.id}
+                          files={filesMap.get(submission.id) || []}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Check className="h-12 w-12 mx-auto text-primary/50 mb-4" />
+                  <h3 className="text-lg font-medium">All caught up!</h3>
+                  <p className="text-muted-foreground mt-1">
+                    No pending submissions to review.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recently Reviewed */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recently Reviewed</CardTitle>
+              <CardDescription>
+                Your recent moderation activity
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentlyReviewed && recentlyReviewed.length > 0 ? (
+                <div className="space-y-3">
+                  {recentlyReviewed.map((submission) => (
+                    <div
+                      key={submission.id}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">{submission.title}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {submission.courses?.code} • {formatDate(submission.approved_at || submission.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={submission.status === "approved" ? "default" : "destructive"}
+                        className="capitalize"
+                      >
+                        {submission.status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  No recent activity
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </main>
 
       <Footer />
     </div>

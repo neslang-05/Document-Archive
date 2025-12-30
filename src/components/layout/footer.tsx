@@ -2,7 +2,11 @@ import Link from "next/link"
 import { BookOpen, Github, Mail, ExternalLink } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 
-export function Footer() {
+interface FooterProps {
+  variant?: "default" | "compact"
+}
+
+export function Footer({ variant = "compact" }: FooterProps) {
   const currentYear = new Date().getFullYear()
 
   const footerLinks = {
@@ -24,6 +28,35 @@ export function Footer() {
       { name: "FAQ", href: "/docs/faq" },
       { name: "Contact Us", href: "/contact" },
     ],
+  }
+
+  if (variant === "compact") {
+    return (
+      <footer className="mt-auto border-t bg-card">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col items-center justify-between gap-2 sm:flex-row text-sm text-muted-foreground">
+            <p>© {currentYear} MTU Archive. Built for students, by students.</p>
+            <div className="flex items-center gap-4">
+              <Link href="/privacy" className="hover:text-foreground transition-colors">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" className="hover:text-foreground transition-colors">
+                Terms of Service
+              </Link>
+              <a
+                href="https://mtu.ac.in"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 hover:text-foreground transition-colors"
+              >
+                MTU Website
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    )
   }
 
   return (

@@ -12,8 +12,7 @@ import {
   BookOpen,
   Loader2,
   AlertCircle,
-  File,
-  X
+  File
 } from "lucide-react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -96,15 +95,12 @@ export default function SubmitPage() {
     year: "",
     title: "",
     description: "",
+    file: null as File | null,
   })
 
-  const [files, setFiles] = useState<File[]>([])
-  const [dragActive, setDragActive] = useState(false)
-  const MAX_FILES = 10
-  const MAX_TOTAL_SIZE = 50 * 1024 * 1024 // 50MB
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const updateFormData = (field: string, value: string) => {
+  const updateFormData = (field: string, value: string | File | null) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors((prev) => {
@@ -133,7 +129,7 @@ export default function SubmitPage() {
         }
         break
       case 3:
-        if (files.length === 0) newErrors.files = "Please upload at least one file"
+        if (!formData.file) newErrors.file = "Please upload a file"
         break
     }
 
@@ -151,92 +147,30 @@ export default function SubmitPage() {
     setCurrentStep((prev) => Math.max(prev - 1, 1))
   }
 
-  const handleFilesChange = (newFiles: FileList | null) => {
-    if (!newFiles) return
-    
-    const selectedFiles = Array.from(newFiles)
-    
-    // Validate count
-    if (selectedFiles.length + files.length > MAX_FILES) {
-      setErrors({ files: `Maximum ${MAX_FILES} files allowed` })
-      return
-    }
-    
-    // Validate total size
-    const totalSize = [...files, ...selectedFiles].reduce((sum, f) => sum + f.size, 0)
-    if (totalSize > MAX_TOTAL_SIZE) {
-      setErrors({ files: "Total file size must be less than 50MB" })
-      return
-    }
-    
-    // Validate file types - now accepting all common types including images
-    const allowedTypes = [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-powerpoint",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/zip",
-      "application/x-rar-compressed",
-      "application/x-7z-compressed",
-      "text/plain",
-      "image/jpeg",
-      "image/png",
-      "image/gif",
-      "image/webp",
-      "image/svg+xml",
-    ]
-    
-    const invalidFiles = selectedFiles.filter(f => !allowedTypes.includes(f.type))
-    if (invalidFiles.length > 0) {
-      setErrors({ files: `Invalid file type: ${invalidFiles[0].name}. Allowed: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, Images, ZIP, RAR, TXT` })
-      return
-    }
-    
-    setFiles(prev => [...prev, ...selectedFiles])
-    if (errors.files) {
-      setErrors(prev => {
-        const newErrors = { ...prev }
-        delete newErrors.files
-        return newErrors
-      })
-    }
-  }
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFilesChange(e.target.files)
-  }
-  
-  const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index))
-  }
-  
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true)
-    } else if (e.type === "dragleave") {
-      setDragActive(false)
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file size (max 50MB)
+      if (file.size > 50 * 1024 * 1024) {
+        setErrors({ file: "File size must be less than 50MB" })
+        return
+      }
+      // Validate file type
+      const allowedTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/zip",
+        "application/x-rar-compressed",
+      ]
+      if (!allowedTypes.includes(file.type)) {
+        setErrors({ file: "Invalid file type. Allowed: PDF, DOC, DOCX, PPT, PPTX, ZIP, RAR" })
+        return
+      }
+      updateFormData("file", file)
     }
-  }
-  
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-    
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFilesChange(e.dataTransfer.files)
-    }
-  }
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " B"
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
-    return (bytes / (1024 * 1024)).toFixed(2) + " MB"
   }
 
   const handleSubmit = async () => {
@@ -269,15 +203,14 @@ export default function SubmitPage() {
         return
       }
 
-      // First create the resource record (using first file for primary data)
-      const primaryFile = files[0]
-      const primaryFileExt = primaryFile.name.split(".").pop()
-      const primaryFileName = `${user.id}/${Date.now()}_${primaryFile.name}`
+      // Upload file to Supabase Storage
+      const file = formData.file!
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${user.id}/${Date.now()}_${file.name}`
 
-      // Upload primary file to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("resourses")
-        .upload(primaryFileName, primaryFile, {
+        .upload(fileName, file, {
           cacheControl: "3600",
           upsert: false,
         })
@@ -288,79 +221,34 @@ export default function SubmitPage() {
         return
       }
 
-      // Get public URL for the primary file
+      // Get public URL for the file
       const { data: urlData } = supabase.storage
         .from("resourses")
-        .getPublicUrl(primaryFileName)
+        .getPublicUrl(fileName)
 
       // Insert resource record
-      const { data: resourceData, error: insertError } = await supabase
-        .from("resources")
-        .insert({
-          course_id: courseData.id,
-          uploader_id: user.id,
-          title: formData.title.trim(),
-          description: formData.description.trim() || null,
-          category: formData.category as ResourceCategory,
-          exam_type: (formData.examType || null) as ExamType | null,
-          year: parseInt(formData.year, 10),
-          file_url: urlData.publicUrl,
-          file_name: primaryFile.name,
-          file_size: primaryFile.size,
-          file_type: primaryFile.type,
-          status: "pending",
-        })
-        .select()
-        .single()
+      const { error: insertError } = await supabase.from("resources").insert({
+        course_id: courseData.id,
+        uploader_id: user.id,
+        title: formData.title.trim(),
+        description: formData.description.trim() || null,
+        category: formData.category as ResourceCategory,
+        exam_type: (formData.examType || null) as ExamType | null,
+        year: parseInt(formData.year, 10),
+        file_url: urlData.publicUrl,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        status: "pending",
+      })
 
-      if (insertError || !resourceData) {
+      if (insertError) {
         // Clean up uploaded file if DB insert fails
-        await supabase.storage.from("resourses").remove([primaryFileName])
-        setErrors({ submit: `Failed to save resource: ${insertError?.message || "Unknown error"}` })
+        await supabase.storage.from("resourses").remove([fileName])
+        setErrors({ submit: `Failed to save resource: ${insertError.message}` })
         setIsSubmitting(false)
         return
       }
-
-      // Upload all files and create resource_files entries
-      const fileUploadPromises = files.map(async (file, index) => {
-        try {
-          const fileName = `${user.id}/${resourceData.id}/${Date.now()}_${index}_${file.name}`
-          
-          const { error: fileUploadError } = await supabase.storage
-            .from("resourses")
-            .upload(fileName, file, {
-              cacheControl: "3600",
-              upsert: false,
-            })
-
-          if (fileUploadError) throw fileUploadError
-
-          const { data: fileUrlData } = supabase.storage
-            .from("resourses")
-            .getPublicUrl(fileName)
-
-          // Insert into resource_files table
-          const { error: fileInsertError } = await supabase
-            .from("resource_files")
-            .insert({
-              resource_id: resourceData.id,
-              file_url: fileUrlData.publicUrl,
-              file_name: file.name,
-              file_size: file.size,
-              file_type: file.type,
-              file_order: index,
-            })
-
-          if (fileInsertError) throw fileInsertError
-          
-          return { success: true }
-        } catch (err) {
-          console.error(`Failed to upload ${file.name}:`, err)
-          return { success: false, error: err }
-        }
-      })
-
-      await Promise.all(fileUploadPromises)
 
       setIsSubmitting(false)
       setSubmitted(true)
@@ -758,94 +646,57 @@ export default function SubmitPage() {
                 </>
               )}
 
-              {/* Step 3: Upload Files */}
+              {/* Step 3: Upload File */}
               {currentStep === 3 && (
                 <div className="space-y-4">
                   <div
                     className={cn(
                       "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-                      dragActive && "border-primary bg-primary/5",
-                      files.length > 0
+                      formData.file
                         ? "border-primary bg-primary/5"
-                        : errors.files
+                        : errors.file
                         ? "border-destructive"
                         : "border-muted hover:border-primary/50"
                     )}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
                   >
                     <input
                       type="file"
-                      id="files"
+                      id="file"
                       className="hidden"
-                      accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.7z,.txt,image/*"
-                      multiple
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.rar"
                       onChange={handleFileChange}
                     />
-                    <label htmlFor="files" className="cursor-pointer">
-                      <div className="flex flex-col items-center gap-2">
-                        <Upload className="h-12 w-12 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">
-                            {dragActive ? "Drop files here" : "Click to upload or drag and drop"}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            PDF, DOC, Images, ZIP, etc. • Up to {MAX_FILES} files • Max {MAX_TOTAL_SIZE / (1024 * 1024)}MB total
-                          </p>
+                    <label htmlFor="file" className="cursor-pointer">
+                      {formData.file ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <File className="h-12 w-12 text-primary" />
+                          <div>
+                            <p className="font-medium">{formData.file.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {(formData.file.size / (1024 * 1024)).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <Button variant="outline" size="sm" type="button">
+                            Choose different file
+                          </Button>
                         </div>
-                        <Button variant="outline" size="sm" type="button">
-                          Browse Files
-                        </Button>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <Upload className="h-12 w-12 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium">Click to upload</p>
+                            <p className="text-sm text-muted-foreground">
+                              PDF, DOC, DOCX, PPT, PPTX, ZIP, RAR (max 50MB)
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </label>
                   </div>
-                  
-                  {/* File List */}
-                  {files.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">
-                          {files.length} file{files.length !== 1 ? 's' : ''} selected
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Total: {formatFileSize(files.reduce((sum, f) => sum + f.size, 0))}
-                        </p>
-                      </div>
-                      <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {files.map((file, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                          >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <File className="h-5 w-5 text-primary shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{file.name}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {formatFileSize(file.size)}
-                                </p>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeFile(index)}
-                              type="button"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {errors.files && (
+                  {errors.file && (
                     <p className="text-sm text-destructive flex items-center gap-1">
                       <AlertCircle className="h-4 w-4" />
-                      {errors.files}
+                      {errors.file}
                     </p>
                   )}
                 </div>
@@ -885,19 +736,9 @@ export default function SubmitPage() {
                       <span className="text-muted-foreground">Title</span>
                       <span>{formData.title}</span>
                     </div>
-                  </div>
-                  
-                  <div className="rounded-lg border p-4">
-                    <p className="font-medium mb-3">Files ({files.length})</p>
-                    <div className="space-y-2">
-                      {files.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between text-sm">
-                          <span className="truncate flex-1">{file.name}</span>
-                          <span className="text-muted-foreground ml-2">
-                            {formatFileSize(file.size)}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">File</span>
+                      <span>{formData.file?.name}</span>
                     </div>
                   </div>
 

@@ -81,7 +81,7 @@ export default async function BookmarksPage() {
                   </div>
 
                   <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground hidden md:flex">
+                    <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1" title="Downloads">
                         <Download className="h-4 w-4" />
                         {formatNumber(resource.download_count)}

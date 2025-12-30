@@ -6,12 +6,7 @@ import { Button } from "@/components/ui/button"
 import { FileText, Download, Star, Clock, MoreVertical, Eye } from "lucide-react"
 import { formatNumber, formatDate } from "@/lib/utils"
 import Link from "next/link"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import SubmissionActions from "./submission-actions"
 
 export default async function SubmissionsPage() {
   const supabase = await createClient()
@@ -52,12 +47,12 @@ export default async function SubmissionsPage() {
         {submissions && submissions.length > 0 ? (
           submissions.map((submission) => (
             <Card key={submission.id}>
-              <CardContent className="p-6 flex items-center justify-between">
-                <div className="flex items-center gap-4">
+              <CardContent className="p-6 flex flex-col md:flex-row items-start md:items-center gap-4">
+<div className="flex items-center gap-4 flex-1">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                     <FileText className="h-6 w-6 text-primary" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h3 className="font-semibold text-lg">{submission.title}</h3>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                       <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">
@@ -68,11 +63,17 @@ export default async function SubmissionsPage() {
                       <span>•</span>
                       <span>{formatDate(submission.created_at)}</span>
                     </div>
+                    {submission.status === 'rejected' && submission.rejection_reason && (
+                      <div className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded text-sm">
+                        <p className="text-destructive font-medium mb-1">Rejection Reason:</p>
+                        <p className="text-muted-foreground">{submission.rejection_reason}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground hidden md:flex">
+                  <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1" title="Downloads">
                       <Download className="h-4 w-4" />
                       {formatNumber(submission.download_count)}

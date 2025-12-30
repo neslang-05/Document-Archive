@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
@@ -32,112 +32,30 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatDate, formatNumber } from "@/lib/utils"
-
-// Mock course data
-const mockCourse = {
-  id: "cs3522",
-  code: "CS3522",
-  name: "Database Management Systems",
-  semester: 5,
-  credits: 4,
-  courseType: "PCC",
-  department: "Computer Science",
-  description: "This course covers the fundamentals of database systems including data models, relational database design, SQL, transaction processing, concurrency control, and database recovery.",
-  syllabus: [
-    "Unit 1: Introduction to DBMS, Data Models, ER Model",
-    "Unit 2: Relational Model, Relational Algebra",
-    "Unit 3: SQL - DDL, DML, DCL, Constraints, Joins",
-    "Unit 4: Normalization - 1NF, 2NF, 3NF, BCNF",
-    "Unit 5: Transaction Processing, ACID Properties",
-    "Unit 6: Concurrency Control, Locking Protocols",
-    "Unit 7: Database Recovery, Backup Strategies",
-    "Unit 8: NoSQL Databases, MongoDB Basics",
-  ],
-  resourceCount: 24,
-  contributorCount: 12,
+import { createClient } from "@/lib/supabase/client"
+type Course = {
+  id: string
+  code: string
+  name: string
+  semester?: number
+  credits?: number | null
+  department_id?: string
+  description?: string | null
+  departments?: { code: string; name: string } | null
 }
 
-// Mock resources
-const mockResources = [
-  {
-    id: "1",
-    title: "DBMS End-Term 2024",
-    category: "question_paper",
-    examType: "end_term",
-    year: 2024,
-    uploader: "Rahul S.",
-    uploadedAt: "2024-12-20T10:30:00Z",
-    rating: 4.5,
-    ratingCount: 23,
-    downloads: 156,
-    views: 342,
-  },
-  {
-    id: "2",
-    title: "DBMS Mid-Term 2024",
-    category: "question_paper",
-    examType: "mid_term",
-    year: 2024,
-    uploader: "Priya K.",
-    uploadedAt: "2024-10-15T14:20:00Z",
-    rating: 4.2,
-    ratingCount: 18,
-    downloads: 134,
-    views: 289,
-  },
-  {
-    id: "3",
-    title: "Complete DBMS Notes Unit 1-8",
-    category: "notes",
-    examType: null,
-    year: 2024,
-    uploader: "Amit G.",
-    uploadedAt: "2024-09-01T09:00:00Z",
-    rating: 4.8,
-    ratingCount: 45,
-    downloads: 312,
-    views: 567,
-  },
-  {
-    id: "4",
-    title: "SQL Lab Manual",
-    category: "lab_manual",
-    examType: null,
-    year: 2024,
-    uploader: "Neha D.",
-    uploadedAt: "2024-08-20T11:30:00Z",
-    rating: 4.3,
-    ratingCount: 28,
-    downloads: 189,
-    views: 423,
-  },
-  {
-    id: "5",
-    title: "DBMS End-Term 2023",
-    category: "question_paper",
-    examType: "end_term",
-    year: 2023,
-    uploader: "Rahul S.",
-    uploadedAt: "2024-01-05T16:45:00Z",
-    rating: 4.1,
-    ratingCount: 34,
-    downloads: 267,
-    views: 512,
-  },
-  {
-    id: "6",
-    title: "ER Diagram Project Report",
-    category: "project_report",
-    examType: null,
-    year: 2024,
-    uploader: "Team Alpha",
-    uploadedAt: "2024-11-28T13:15:00Z",
-    rating: 4.0,
-    ratingCount: 12,
-    downloads: 78,
-    views: 145,
-  },
-]
+type Resource = {
+  id: string
+  title: string
+  category?: string | null
+  exam_type?: string | null
+  year?: number | null
+  created_at?: string | null
+  download_count?: number | null
+  average_rating?: number | null
+  courses?: { code?: string | null; name?: string | null } | null
+  uploader_id?: string | null
+}
 
 const categoryLabels: Record<string, string> = {
   question_paper: "Question Paper",
@@ -178,31 +96,113 @@ export default function CoursePage() {
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [yearFilter, setYearFilter] = useState("all")
   const [sortBy, setSortBy] = useState("recent")
+  const [course, setCourse] = useState<Course | null>(null)
+  const [resources, setResources] = useState<Resource[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const course = mockCourse
-  const resources = mockResources
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const supabase = createClient()
+        const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id
+        if (!rawId) {
+          setError("Course not found")
+          setIsLoading(false)
+          return
+        }
+
+        const courseId = decodeURIComponent(rawId)
+        const selectColumns = "id, code, name, semester, credits, department_id, description, departments(code, name)"
+
+        const { data: courseExact } = await supabase
+          .from("courses")
+          .select(selectColumns)
+          .or(`id.eq.${courseId},code.eq.${courseId}`)
+          .maybeSingle()
+
+        let courseData = courseExact
+
+        if (!courseData) {
+          const { data: courseByCode } = await supabase
+            .from("courses")
+            .select(selectColumns)
+            .ilike("code", courseId)
+            .maybeSingle()
+
+          courseData = courseByCode || null
+        }
+
+        if (!courseData) {
+          // Fallback: show a lightweight page using the URL code
+          const fallbackCourse: Course = {
+            id: courseId,
+            code: courseId.toUpperCase(),
+            name: courseId.toUpperCase(),
+            description: "Resources for this course will appear here.",
+          }
+          setCourse(fallbackCourse)
+          setResources([])
+          setIsLoading(false)
+          return
+        }
+
+        const courseIdValue = courseData.id ?? courseData.code ?? courseId
+
+        const { data: resourceData, error: resourceErr } = await supabase
+          .from("resources")
+          .select("id, title, category, exam_type, year, created_at, download_count, average_rating, uploader_id, courses(code,name)")
+          .eq("course_id", courseIdValue)
+          .eq("status", "approved")
+          .order("created_at", { ascending: false })
+
+        if (resourceErr) {
+          setError("Unable to load resources")
+        }
+
+        setCourse(courseData as Course)
+        setResources((resourceData || []) as Resource[])
+      } catch (err) {
+        setError("Something went wrong")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [params?.id])
 
   // Filter and sort resources
-  const filteredResources = resources
-    .filter((resource) => {
-      const matchesSearch = resource.title.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory = categoryFilter === "all" || resource.category === categoryFilter
-      const matchesYear = yearFilter === "all" || resource.year.toString() === yearFilter
-      return matchesSearch && matchesCategory && matchesYear
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case "rating":
-          return b.rating - a.rating
-        case "downloads":
-          return b.downloads - a.downloads
-        case "recent":
-        default:
-          return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-      }
-    })
+  const filteredResources = useMemo(() => {
+    return resources
+      .filter((resource) => {
+        const title = resource.title || ""
+        const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesCategory = categoryFilter === "all" || resource.category === categoryFilter
+        const yearValue = resource.year ?? null
+        const matchesYear =
+          yearFilter === "all" || (yearValue !== null && yearValue !== undefined && yearValue.toString() === yearFilter)
+        return matchesSearch && matchesCategory && matchesYear
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case "rating":
+            return (b.average_rating ?? 0) - (a.average_rating ?? 0)
+          case "downloads":
+            return (b.download_count ?? 0) - (a.download_count ?? 0)
+          case "recent":
+          default:
+            return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        }
+      })
+  }, [resources, searchQuery, categoryFilter, yearFilter, sortBy])
 
-  const uniqueYears = [...new Set(resources.map((r) => r.year))].sort((a, b) => b - a)
+  const uniqueYears = useMemo(
+    () => [...new Set(resources.map((r) => r.year).filter((y): y is number => y != null))].sort((a, b) => b - a),
+    [resources]
+  )
 
   const renderStars = (rating: number) => {
     return (
@@ -221,18 +221,49 @@ export default function CoursePage() {
     )
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1 container mx-auto px-4 py-10 text-muted-foreground">
+          Loading course...
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  if (error || !course) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1 container mx-auto px-4 py-10 text-center">
+          <h1 className="text-2xl font-bold mb-2">Course not found</h1>
+          <p className="text-muted-foreground mb-4">Please check the course link or go back to courses.</p>
+          <Link href="/courses">
+            <Button>Back to Courses</Button>
+          </Link>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  const resourceCount = resources.length
+  const contributorCount = new Set(resources.map((r) => r.uploader_id).filter(Boolean)).size
+  const departmentName = course.departments?.name || "Unknown Department"
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-
-      <main className="flex-1 p-6">
-        <div className="container mx-auto">
+      
+      <main className="flex-1">
+        <div className="container mx-auto px-4 py-6">
           <Breadcrumbs
             items={[
               { label: "Courses", href: "/courses" },
               { label: course.code },
             ]}
-            className="mb-6"
           />
 
           {/* Back Link */}
@@ -253,13 +284,16 @@ export default function CoursePage() {
                     <span className="font-mono text-lg font-bold bg-muted px-3 py-1 rounded">
                       {course.code}
                     </span>
-                    <Badge variant="outline">{course.courseType}</Badge>
-                    <Badge variant="secondary">Semester {course.semester}</Badge>
-                    <Badge variant="secondary">{course.credits} Credits</Badge>
+                    {course.semester && (
+                      <Badge variant="secondary">Semester {course.semester}</Badge>
+                    )}
+                    {course.credits && (
+                      <Badge variant="secondary">{course.credits} Credits</Badge>
+                    )}
                   </div>
                   <h1 className="text-2xl font-bold mb-2">{course.name}</h1>
                   <p className="text-muted-foreground max-w-3xl">
-                    {course.description}
+                    {course.description || "No description available."}
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row lg:flex-col gap-3">
@@ -276,17 +310,17 @@ export default function CoursePage() {
               <div className="flex flex-wrap items-center gap-6 mt-6 pt-6 border-t text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <FileText className="h-5 w-5" />
-                  <span className="font-medium text-foreground">{course.resourceCount}</span>
+                  <span className="font-medium text-foreground">{resourceCount}</span>
                   Resources
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Users className="h-5 w-5" />
-                  <span className="font-medium text-foreground">{course.contributorCount}</span>
+                  <span className="font-medium text-foreground">{contributorCount}</span>
                   Contributors
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <GraduationCap className="h-5 w-5" />
-                  <span className="font-medium text-foreground">{course.department}</span>
+                  <span className="font-medium text-foreground">{departmentName}</span>
                 </div>
               </div>
             </CardContent>
@@ -303,13 +337,11 @@ export default function CoursePage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="space-y-2 text-sm">
-                    {course.syllabus.map((unit, idx) => (
-                      <li key={idx} className="text-muted-foreground">
-                        {unit}
-                      </li>
-                    ))}
-                  </ul>
+                  {course.description ? (
+                    <p className="text-sm text-muted-foreground">{course.description}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Course description coming soon.</p>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -332,7 +364,7 @@ export default function CoursePage() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                        <SelectTrigger className="w-[140px]">
+                        <SelectTrigger className="w-36">
                           <SelectValue placeholder="Category" />
                         </SelectTrigger>
                         <SelectContent>
@@ -344,7 +376,7 @@ export default function CoursePage() {
                         </SelectContent>
                       </Select>
                       <Select value={yearFilter} onValueChange={setYearFilter}>
-                        <SelectTrigger className="w-[100px]">
+                        <SelectTrigger className="w-24">
                           <SelectValue placeholder="Year" />
                         </SelectTrigger>
                         <SelectContent>
@@ -357,7 +389,7 @@ export default function CoursePage() {
                         </SelectContent>
                       </Select>
                       <Select value={sortBy} onValueChange={setSortBy}>
-                        <SelectTrigger className="w-[130px]">
+                        <SelectTrigger className="w-32">
                           <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
@@ -395,8 +427,17 @@ export default function CoursePage() {
                   <p className="text-sm text-muted-foreground">
                     Showing {filteredResources.length} resource{filteredResources.length !== 1 ? "s" : ""}
                   </p>
-                  {filteredResources.map((resource) => (
-                    <Link key={resource.id} href={`/resources/${resource.id}`}>
+                  {filteredResources.map((resource) => {
+                    const category = resource.category || "question_paper"
+                    const examType = resource.exam_type || null
+                    const rating = resource.average_rating ?? 0
+                    const downloads = resource.download_count ?? 0
+                    const year = resource.year ?? ""
+                    const uploaderLabel = resource.uploader_id ? "Contributor" : "Unknown"
+                    const createdAt = resource.created_at || new Date().toISOString()
+
+                    return (
+                      <Link key={resource.id} href={`/resources/${resource.id}`}>
                       <Card className="hover:border-primary/50 transition-colors cursor-pointer">
                         <CardContent className="p-4">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -404,48 +445,48 @@ export default function CoursePage() {
                               <div className="flex flex-wrap items-center gap-2 mb-2">
                                 <Badge
                                   variant="secondary"
-                                  className={categoryColors[resource.category]}
+                                  className={categoryColors[category] || categoryColors.question_paper}
                                 >
-                                  {categoryLabels[resource.category]}
+                                  {categoryLabels[category] || category}
                                 </Badge>
-                                {resource.examType && (
+                                {examType && (
                                   <Badge variant="outline">
-                                    {examTypeLabels[resource.examType]}
+                                    {examTypeLabels[examType] || examType.replace("_", " ")}
                                   </Badge>
                                 )}
-                                <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
-                                  {resource.year}
-                                </span>
+                                {year && (
+                                  <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                                    {year}
+                                  </span>
+                                )}
                               </div>
                               <h3 className="font-semibold">{resource.title}</h3>
                               <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
-                                <span>by {resource.uploader}</span>
+                                <span>by {uploaderLabel}</span>
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {formatDate(resource.uploadedAt)}
+                                  {formatDate(createdAt)}
                                 </span>
                               </div>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
                               <div className="flex items-center gap-1">
-                                {renderStars(Math.round(resource.rating))}
+                                {renderStars(Math.round(rating))}
                                 <span className="ml-1 font-medium">
-                                  {resource.rating.toFixed(1)}
-                                </span>
-                                <span className="text-muted-foreground">
-                                  ({resource.ratingCount})
+                                  {rating.toFixed(1)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1 text-muted-foreground">
                                 <Download className="h-4 w-4" />
-                                {formatNumber(resource.downloads)}
+                                {formatNumber(downloads)}
                               </div>
                             </div>
                           </div>
                         </CardContent>
                       </Card>
-                    </Link>
-                  ))}
+                      </Link>
+                    )
+                  })}
                 </div>
               )}
             </div>

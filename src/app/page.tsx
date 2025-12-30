@@ -101,7 +101,7 @@ export default async function HomePage() {
       
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-header-bg to-background py-20 text-white">
+        <section className="relative overflow-hidden bg-linear-to-b from-header-bg to-background py-20 text-white">
           <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
           <div className="container relative mx-auto px-4 text-center">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
@@ -314,7 +314,7 @@ export default async function HomePage() {
         </section>
       </main>
 
-      <Footer />
+      <Footer variant="default" />
     </div>
   )
 }

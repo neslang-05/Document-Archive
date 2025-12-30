@@ -189,7 +189,7 @@ export default function ProfilePage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header user={{ id: user.id, email: user.email, full_name: user.full_name, role: user.role as 'student' | 'moderator' | 'admin' }} />
+      <Header />
 
       <main className="flex-1 p-6">
         <div className="container mx-auto">

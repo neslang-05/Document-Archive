@@ -44,6 +44,7 @@ export interface Database {
           role?: UserRole
           updated_at?: string
         }
+        Relationships: []
       }
       departments: {
         Row: {
@@ -65,6 +66,7 @@ export interface Database {
           code?: string
           description?: string | null
         }
+        Relationships: []
       }
       courses: {
         Row: {
@@ -95,6 +97,15 @@ export interface Database {
           credits?: number | null
           description?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "courses_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       resources: {
         Row: {
@@ -161,6 +172,29 @@ export interface Database {
           rejection_reason?: string | null
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "resources_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resources_uploader_id_fkey"
+            columns: ["uploader_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resources_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       ratings: {
         Row: {
@@ -186,6 +220,22 @@ export interface Database {
           review?: string | null
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "ratings_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       bookmarks: {
         Row: {
@@ -200,12 +250,28 @@ export interface Database {
           resource_id: string
           created_at?: string
         }
-        Update: Partial<{
-          id: string
-          user_id: string
-          resource_id: string
-          created_at: string
-        }>
+        Update: {
+          id?: string
+          user_id?: string
+          resource_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookmarks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookmarks_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       activity_log: {
         Row: {
@@ -224,14 +290,68 @@ export interface Database {
           metadata?: Json | null
           created_at?: string
         }
-        Update: Partial<{
+        Update: {
+          id?: string
+          user_id?: string | null
+          action?: string
+          resource_id?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_log_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      resource_files: {
+        Row: {
           id: string
-          user_id: string | null
-          action: string
-          resource_id: string | null
-          metadata: Json | null
+          resource_id: string
+          file_url: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_order: number
           created_at: string
-        }>
+        }
+        Insert: {
+          id?: string
+          resource_id: string
+          file_url: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_order?: number
+          created_at?: string
+        }
+        Update: {
+          file_url?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_files_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
@@ -260,6 +380,7 @@ export type Resource = Database["public"]["Tables"]["resources"]["Row"]
 export type Rating = Database["public"]["Tables"]["ratings"]["Row"]
 export type Bookmark = Database["public"]["Tables"]["bookmarks"]["Row"]
 export type ActivityLog = Database["public"]["Tables"]["activity_log"]["Row"]
+export type ResourceFile = Database["public"]["Tables"]["resource_files"]["Row"]
 
 // Extended types with relations
 export type ResourceWithCourse = Resource & {

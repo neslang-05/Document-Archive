@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Download, Bookmark, Star, Clock } from "lucide-react"
+import { FileText, Download, Bookmark, Star, Clock, Upload } from "lucide-react"
 import { formatNumber, formatDate } from "@/lib/utils"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
