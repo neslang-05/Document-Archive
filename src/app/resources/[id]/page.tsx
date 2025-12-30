@@ -9,7 +9,7 @@ import {
   ChevronLeft,
   File as FileIcon,
 } from "lucide-react"
-import { Header } from "@/components/layout/header"
+import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 import { Breadcrumbs } from "@/components/layout/breadcrumbs"
 import { Badge } from "@/components/ui/badge"
@@ -88,7 +88,7 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <HeaderServer />
       
       <main className="flex-1 p-6">
         <div className="container mx-auto max-w-4xl">

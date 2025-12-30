@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { FileText, Download, Star, Filter, Search } from "lucide-react"
-import { Header } from "@/components/layout/header"
+import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -73,7 +73,7 @@ export default async function ResourcesPage({ searchParams }: { searchParams: Se
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <HeaderServer />
       <main className="flex-1">
         <section className="border-b bg-card/40">
           <div className="container mx-auto px-4 py-12 space-y-4">

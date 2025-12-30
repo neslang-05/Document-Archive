@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { Header } from "@/components/layout/header"
+import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -41,7 +41,7 @@ export default async function SearchPage({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <HeaderServer />
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto mb-8">
           <form className="relative flex gap-2">

@@ -7,14 +7,19 @@ import "./globals.css";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap",
+  preload: true,
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
+  preload: true,
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://document-archive.vercel.app"),
   title: {
     default: "MTU Archive - Academic Resource Platform",
     template: "%s | MTU Archive",
@@ -45,7 +50,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://mtu-archive.vercel.app",
+    url: "https://document-archive.vercel.app",
     siteName: "MTU Archive",
     title: "MTU Archive - Academic Resource Platform",
     description:
@@ -106,6 +111,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Preconnect to external origins */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        
+        {/* Preload critical assets */}
+        <link rel="preload" href="/logo.svg" as="image" type="image/svg+xml" />
+        
         <link rel="icon" href="/logo.ico" type="image/x-icon" />
         <link rel="alternate icon" href="/logo.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />

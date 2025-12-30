@@ -1,4 +1,4 @@
-import { Header } from "@/components/layout/header"
+import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 
 export default function StaticLayout({
@@ -8,7 +8,7 @@ export default function StaticLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <HeaderServer />
       <main className="flex-1 container mx-auto px-4 py-8 max-w-3xl">
         {children}
       </main>

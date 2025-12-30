@@ -1,5 +1,5 @@
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
-import { Header } from "@/components/layout/header"
+import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 
 export default function DashboardLayout({
@@ -9,7 +9,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <HeaderServer />
       <div className="flex flex-1 container mx-auto px-4 py-6 gap-6">
         <aside className="hidden md:block">
           <DashboardSidebar />

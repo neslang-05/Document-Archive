@@ -12,11 +12,14 @@ interface User {
   role: "student" | "moderator" | "admin"
 }
 
+// Client-side header that fetches user on mount (used in client pages)
 export function Header() {
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
+    
     const fetchUser = async () => {
       try {
         const supabase = createClient()
@@ -52,18 +55,11 @@ export function Header() {
       } catch (error) {
         console.error('Error fetching user:', error)
         setUser(null)
-      } finally {
-        setIsLoading(false)
       }
     }
 
     fetchUser()
   }, [])
-
-  // Show minimal header while loading
-  if (isLoading) {
-    return <HeaderClient user={null} />
-  }
 
   return <HeaderClient user={user} />
 }

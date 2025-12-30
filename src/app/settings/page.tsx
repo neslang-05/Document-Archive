@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { ProfileForm } from "./profile-form"
-import { Header } from "@/components/layout/header"
+import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 
 export default async function SettingsPage() {
@@ -24,7 +24,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <HeaderServer />
       <main className="flex-1 container mx-auto px-4 py-8 max-w-2xl">
         <h1 className="text-2xl font-bold mb-6">Settings</h1>
         <div className="bg-card border rounded-lg p-6 shadow-sm">

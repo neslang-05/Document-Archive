@@ -82,7 +82,7 @@ export function HeaderClient({ user }: HeaderClientProps) {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="MTU Archive" width={32} height={32} />
+            <Image src="/logo.svg" alt="MTU Archive" width={32} height={32} priority />
             <span className="hidden font-semibold text-white sm:inline-block">
               MTU Archive
             </span>

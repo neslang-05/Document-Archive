@@ -1,4 +1,6 @@
 import Link from "next/link"
+import dynamic from "next/dynamic"
+import { Suspense } from "react"
 import { 
   BookOpen, 
   FileText, 
@@ -10,7 +12,7 @@ import {
   Search,
   Upload
 } from "lucide-react"
-import { Header } from "@/components/layout/header"
+import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +20,65 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/server"
 import { formatNumber } from "@/lib/utils"
+
+// Static skeleton components for instant loading
+function StatsSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="text-center animate-pulse">
+          <div className="mx-auto h-8 w-8 bg-muted rounded" />
+          <div className="mt-2 h-8 w-16 mx-auto bg-muted rounded" />
+          <div className="mt-1 h-4 w-20 mx-auto bg-muted rounded" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function CoursesSkeleton() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {[1, 2, 3, 4].map((i) => (
+        <Card key={i} className="h-full animate-pulse">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="h-5 w-16 bg-muted rounded" />
+              <div className="h-5 w-12 bg-muted rounded" />
+            </div>
+            <div className="h-6 w-full bg-muted rounded mt-2" />
+          </CardHeader>
+          <CardContent>
+            <div className="h-4 w-24 bg-muted rounded" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+function ResourcesSkeleton() {
+  return (
+    <div className="grid gap-4">
+      {[1, 2, 3].map((i) => (
+        <Card key={i} className="animate-pulse">
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 rounded-lg bg-muted" />
+              <div>
+                <div className="h-5 w-48 bg-muted rounded" />
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="h-4 w-16 bg-muted rounded" />
+                  <div className="h-4 w-20 bg-muted rounded" />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
 
 const categoryColors: Record<string, string> = {
   question_paper: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
@@ -36,17 +97,42 @@ const categoryLabels: Record<string, string> = {
 export default async function HomePage() {
   const supabase = await createClient()
 
-  // Fetch stats
+  // Fetch all data in parallel with a single optimized query for courses with resource counts
   const [
     { count: resourceCount },
     { data: downloadData },
     { count: userCount },
-    { count: courseCount }
+    { count: courseCount },
+    { data: recentResources },
+    { data: courses }
   ] = await Promise.all([
     supabase.from('resources').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
     supabase.from('resources').select('download_count').eq('status', 'approved'),
     supabase.from('profiles').select('*', { count: 'exact', head: true }),
-    supabase.from('courses').select('*', { count: 'exact', head: true })
+    supabase.from('courses').select('*', { count: 'exact', head: true }),
+    // Fetch recent resources
+    supabase
+      .from('resources')
+      .select(`
+        id,
+        title,
+        category,
+        year,
+        download_count,
+        average_rating,
+        courses (
+          code,
+          name
+        )
+      `)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(3),
+    // Fetch courses (we'll use a simpler approach for counts)
+    supabase
+      .from('courses')
+      .select('id, code, name, semester')
+      .limit(4)
   ])
 
   const totalDownloads = downloadData?.reduce((sum, item) => sum + (item.download_count || 0), 0) || 0
@@ -58,46 +144,28 @@ export default async function HomePage() {
     { label: "Courses", value: formatNumber(courseCount || 0), icon: BookOpen },
   ]
 
-  // Fetch recent resources
-  const { data: recentResources } = await supabase
+  // Get resource counts for courses in a single query using aggregation
+  const courseIds = (courses || []).map(c => c.id)
+  const { data: resourceCounts } = await supabase
     .from('resources')
-    .select(`
-      *,
-      courses (
-        code,
-        name
-      )
-    `)
+    .select('course_id')
     .eq('status', 'approved')
-    .order('created_at', { ascending: false })
-    .limit(3)
+    .in('course_id', courseIds)
 
-  // Fetch some courses for "Popular Courses" (just picking first 4 for now as we don't have popularity metric yet)
-  // In a real app, we would probably have a view or a column for resource count on the course table
-  const { data: courses } = await supabase
-    .from('courses')
-    .select('*')
-    .limit(4)
+  // Count resources per course
+  const countMap = (resourceCounts || []).reduce((acc, r) => {
+    acc[r.course_id] = (acc[r.course_id] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
 
-  // Fetch resource counts for these courses
-  const coursesWithCounts = await Promise.all(
-    (courses || []).map(async (course) => {
-      const { count } = await supabase
-        .from('resources')
-        .select('*', { count: 'exact', head: true })
-        .eq('course_id', course.id)
-        .eq('status', 'approved')
-      
-      return {
-        ...course,
-        resourceCount: count || 0
-      }
-    })
-  )
+  const coursesWithCounts = (courses || []).map(course => ({
+    ...course,
+    resourceCount: countMap[course.id] || 0
+  }))
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <HeaderServer />
       
       <main className="flex-1">
         {/* Hero Section */}

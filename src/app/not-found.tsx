@@ -1,13 +1,13 @@
 import Link from "next/link"
 import { ArrowLeft, Home, Search } from "lucide-react"
-import { Header } from "@/components/layout/header"
+import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 
 export default function NotFoundPage() {
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <HeaderServer />
       <main className="flex-1">
         <div className="container mx-auto px-4 py-16">
           <div className="mx-auto max-w-2xl text-center space-y-6">
