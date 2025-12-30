@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { FileText, Download, Star, MoreVertical, Eye, Trash2 } from "lucide-react"
+import { FileText, Download, Star, MoreVertical, Eye } from "lucide-react"
 import { formatNumber, formatDate } from "@/lib/utils"
 import Link from "next/link"
 import {
@@ -48,7 +47,7 @@ export default async function BookmarksPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">My Bookmarks</h1>
         <p className="text-muted-foreground">
-          Resources you've saved for quick access.
+          Resources you&apos;ve saved for quick access.
         </p>
       </div>
 
@@ -119,7 +118,7 @@ export default async function BookmarksPage() {
             <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-medium">No bookmarks yet</h3>
             <p className="text-muted-foreground mt-2 mb-6">
-              You haven't bookmarked any resources yet. Browse courses to find useful materials!
+              You haven&apos;t bookmarked any resources yet. Browse courses to find useful materials!
             </p>
             <Link href="/courses">
               <Button>Browse Courses</Button>

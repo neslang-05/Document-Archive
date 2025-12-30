@@ -1,18 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { BookOpen, FileText, Search, Filter, ChevronDown } from "lucide-react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
-import { Sidebar } from "@/components/layout/sidebar"
 import { Breadcrumbs } from "@/components/layout/breadcrumbs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -129,7 +127,7 @@ const courseTypeColors: Record<string, string> = {
   LLC: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
 }
 
-export default function CoursesPage() {
+function CoursesPageContent() {
   const searchParams = useSearchParams()
   const initialSemester = searchParams.get("semester")
   
@@ -362,5 +360,29 @@ export default function CoursesPage() {
 
       <Footer />
     </div>
+  )
+}
+
+function CoursesPageLoading() {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Header />
+      <div className="flex flex-1">
+        <main className="flex-1 p-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-pulse text-muted-foreground">Loading courses...</div>
+          </div>
+        </main>
+      </div>
+      <Footer />
+    </div>
+  )
+}
+
+export default function CoursesPage() {
+  return (
+    <Suspense fallback={<CoursesPageLoading />}>
+      <CoursesPageContent />
+    </Suspense>
   )
 }

@@ -1,15 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { 
   Upload, 
-  FileText, 
   ChevronRight, 
   ChevronLeft, 
   Check, 
-  BookOpen,
   Loader2,
   AlertCircle,
   File,
@@ -77,7 +74,6 @@ type DepartmentOption = {
 }
 
 export default function SubmitPage() {
-  const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -104,16 +100,17 @@ export default function SubmitPage() {
   const MAX_TOTAL_SIZE = 50 * 1024 * 1024 // 50MB
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const updateFormData = (field: string, value: string) => {
+  const updateFormData = useCallback((field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-    if (errors[field]) {
-      setErrors((prev) => {
+    setErrors((prev) => {
+      if (prev[field]) {
         const newErrors = { ...prev }
         delete newErrors[field]
         return newErrors
-      })
-    }
-  }
+      }
+      return prev
+    })
+  }, [])
 
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {}
@@ -271,11 +268,10 @@ export default function SubmitPage() {
 
       // First create the resource record (using first file for primary data)
       const primaryFile = files[0]
-      const primaryFileExt = primaryFile.name.split(".").pop()
       const primaryFileName = `${user.id}/${Date.now()}_${primaryFile.name}`
 
       // Upload primary file to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("resourses")
         .upload(primaryFileName, primaryFile, {
           cacheControl: "3600",
@@ -364,7 +360,7 @@ export default function SubmitPage() {
 
       setIsSubmitting(false)
       setSubmitted(true)
-    } catch (err) {
+    } catch {
       setErrors({ submit: "An unexpected error occurred. Please try again." })
       setIsSubmitting(false)
     }
@@ -395,7 +391,7 @@ export default function SubmitPage() {
     }
 
     fetchDepartments()
-  }, [])
+  }, [formData.department, updateFormData])
 
   // Fetch courses whenever department and semester are both selected
   useEffect(() => {
@@ -431,7 +427,7 @@ export default function SubmitPage() {
     }
 
     fetchCourses()
-  }, [formData.department, formData.semester])
+  }, [formData.department, formData.semester, formData.courseCode, updateFormData])
 
   if (submitted) {
     return (

@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { 
-  FileText, 
   Download, 
   Star, 
   Clock,
@@ -125,7 +124,7 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
                   <div className="flex-1">
                     {resource.status === "pending" && (
                       <p className="text-sm text-muted-foreground">
-                        Your submission is being reviewed by moderators. You'll be notified once it's approved.
+                        Your submission is being reviewed by moderators. You&apos;ll be notified once it&apos;s approved.
                       </p>
                     )}
                     {resource.status === "rejected" && resource.rejection_reason && (
@@ -197,7 +196,7 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
               <ResourceActions
                 files={resourceFiles || []}
                 primaryFileUrl={resource.file_url}
-                primaryFileName={resource.file_name}
+
               />
             </CardContent>
           </Card>
@@ -213,7 +212,7 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {resourceFiles.map((file, index) => (
+                  {resourceFiles.map((file) => (
                     <div key={file.id} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent transition-colors">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <FileIcon className="h-5 w-5 text-primary shrink-0" />
@@ -243,7 +242,8 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
           )}
 
           {/* File & Upload Info */}
-          <div className="grid gap-6 md:grid-cols-2 mt-6">\n            <Card>
+          <div className="grid gap-6 md:grid-cols-2 mt-6">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">File Information</CardTitle>
               </CardHeader>

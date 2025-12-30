@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import Link from "next/link"
 import { 
   Shield, 
   FileText, 
@@ -100,7 +99,7 @@ export default async function ModerationPage() {
     .order("file_order")
 
   // Create a map of resource_id to files
-  const filesMap = new Map<string, any[]>()
+  const filesMap = new Map<string, Array<{ id: string; resource_id: string; file_url: string; file_name: string; file_size: number; file_type: string; file_order: number; created_at: string }>>()
   allFiles?.forEach(file => {
     if (!filesMap.has(file.resource_id)) {
       filesMap.set(file.resource_id, [])

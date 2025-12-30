@@ -18,6 +18,10 @@ export default async function SettingsPage() {
     .eq('id', user.id)
     .single()
 
+  if (!profile) {
+    redirect("/auth/login")
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />

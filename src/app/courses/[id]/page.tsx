@@ -9,7 +9,6 @@ import {
   Download,
   Star,
   Search,
-  Filter,
   ChevronLeft,
   Clock,
   Plus,
@@ -22,8 +21,7 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -77,17 +75,6 @@ const categoryColors: Record<string, string> = {
   notes: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   lab_manual: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
   project_report: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-}
-
-const courseTypeLabels: Record<string, string> = {
-  PCC: "Professional Core Course",
-  LC: "Lab Course",
-  SEC: "Skill Enhancement Course",
-  OEC: "Open Elective Course",
-  PEC: "Professional Elective Course",
-  BSC: "Basic Science Course",
-  ESC: "Engineering Science Course",
-  HSMC: "Humanities & Social Science",
 }
 
 export default function CoursePage() {
@@ -164,7 +151,7 @@ export default function CoursePage() {
 
         setCourse(courseData as Course)
         setResources((resourceData || []) as Resource[])
-      } catch (err) {
+      } catch {
         setError("Something went wrong")
       } finally {
         setIsLoading(false)

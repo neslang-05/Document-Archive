@@ -19,7 +19,7 @@ export default function FAQPage() {
         <AccordionItem value="item-2">
           <AccordionTrigger>How do I upload a resource?</AccordionTrigger>
           <AccordionContent>
-            You need to sign in with your account. Once signed in, click on the "Upload Resource" button in the header or dashboard.
+            You need to sign in with your account. Once signed in, click on the &quot;Upload Resource&quot; button in the header or dashboard.
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="item-3">

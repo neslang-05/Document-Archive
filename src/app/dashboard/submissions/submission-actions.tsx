@@ -41,7 +41,7 @@ export default function SubmissionActions({ resourceId }: SubmissionActionsProps
       // First, fetch all files associated with this resource
       const { data: resourceFiles, error: fetchError } = await supabase
         .from("resource_files")
-        .select("storage_path")
+        .select("file_url")
         .eq("resource_id", resourceId)
 
       if (fetchError) {
@@ -53,14 +53,25 @@ export default function SubmissionActions({ resourceId }: SubmissionActionsProps
 
       // Delete all files from storage
       if (resourceFiles && resourceFiles.length > 0) {
-        const filePaths = resourceFiles.map(f => f.storage_path)
-        const { error: storageError } = await supabase.storage
-          .from("resourses")
-          .remove(filePaths)
+        // Extract storage paths from file URLs
+        const filePaths = resourceFiles
+          .map(f => {
+            // Extract path from Supabase storage URL
+            const url = f.file_url
+            const match = url.match(/\/storage\/v1\/object\/public\/resourses\/(.+)/)
+            return match ? match[1] : null
+          })
+          .filter((path): path is string => path !== null)
+        
+        if (filePaths.length > 0) {
+          const { error: storageError } = await supabase.storage
+            .from("resourses")
+            .remove(filePaths)
 
-        if (storageError) {
-          console.error("Error deleting files from storage:", storageError)
-          // Continue anyway - the database cascade will clean up references
+          if (storageError) {
+            console.error("Error deleting files from storage:", storageError)
+            // Continue anyway - the database cascade will clean up references
+          }
         }
       }
 

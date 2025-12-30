@@ -17,8 +17,8 @@ export default async function SearchPage({
   const query = q || ""
   const supabase = await createClient()
 
-  let resources: any[] = []
-  let courses: any[] = []
+  let resources: Array<{ id: string; title: string; category?: string; courses?: { code: string; name: string } | null }> = []
+  let courses: Array<{ id: string; code: string; name: string; semester: number }> = []
 
   if (query) {
     const [resourcesResult, coursesResult] = await Promise.all([
@@ -84,7 +84,7 @@ export default async function SearchPage({
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground">No courses found matching "{query}"</p>
+                <p className="text-muted-foreground">No courses found matching &quot;{query}&quot;</p>
               )}
             </section>
 
@@ -108,7 +108,7 @@ export default async function SearchPage({
                               <span className="font-mono bg-muted px-1 rounded text-xs">
                                 {resource.courses?.code}
                               </span>
-                              <span className="capitalize">{resource.category.replace('_', ' ')}</span>
+                              <span className="capitalize">{resource.category?.replace('_', ' ')}</span>
                             </div>
                           </div>
                         </CardContent>
@@ -117,7 +117,7 @@ export default async function SearchPage({
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground">No resources found matching "{query}"</p>
+                <p className="text-muted-foreground">No resources found matching &quot;{query}&quot;</p>
               )}
             </section>
           </div>

@@ -16,7 +16,7 @@ export default function TermsPage() {
       </p>
       <h2>Disclaimer</h2>
       <p>
-        The materials on MTU Academic Archive are provided "as is". We make no warranties, expressed or implied, regarding the accuracy or reliability of the materials.
+        The materials on MTU Academic Archive are provided &quot;as is&quot;. We make no warranties, expressed or implied, regarding the accuracy or reliability of the materials.
       </p>
     </div>
   )

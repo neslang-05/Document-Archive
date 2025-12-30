@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 
-export function ProfileForm({ user }: { user: any }) {
+interface UserProfile {
+  id: string
+  email: string
+  full_name?: string | null
+}
+
+export function ProfileForm({ user }: { user: UserProfile }) {
   const [fullName, setFullName] = useState(user.full_name || "")
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState("")

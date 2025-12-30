@@ -11,7 +11,7 @@ export default function GuidelinesPage() {
       </p>
       <h2>Naming Convention</h2>
       <p>
-        Give your files descriptive names, e.g., "CS3522_DBMS_EndTerm_2023.pdf".
+        Give your files descriptive names, e.g., &quot;CS3522_DBMS_EndTerm_2023.pdf&quot;.
       </p>
       <h2>Content Quality</h2>
       <p>

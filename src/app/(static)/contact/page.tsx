@@ -8,7 +8,7 @@ export default function ContactPage() {
     <div className="max-w-xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Contact Us</h1>
       <p className="text-muted-foreground mb-8">
-        Have questions, suggestions, or feedback? We'd love to hear from you. Fill out the form below and we'll get back to you as soon as possible.
+        Have questions, suggestions, or feedback? We&apos;d love to hear from you. Fill out the form below and we&apos;ll get back to you as soon as possible.
       </p>
       
       <form className="space-y-6">

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Download, Bookmark, Star, Clock, Upload } from "lucide-react"
+import { FileText, Download, Bookmark, Upload } from "lucide-react"
 import { formatNumber, formatDate } from "@/lib/utils"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
@@ -20,13 +20,10 @@ export default async function DashboardPage() {
     { count: uploadCount },
     { data: uploads },
     { count: bookmarkCount },
-    { data: recentActivity } // We don't have an activity table yet, so we'll simulate or just show recent uploads/bookmarks
   ] = await Promise.all([
     supabase.from('resources').select('*', { count: 'exact', head: true }).eq('uploader_id', user.id),
     supabase.from('resources').select('download_count').eq('uploader_id', user.id),
     supabase.from('bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    // For activity, we can fetch recent uploads and bookmarks and merge them
-    Promise.resolve({ data: [] }) 
   ])
 
   const totalDownloads = uploads?.reduce((sum, item) => sum + (item.download_count || 0), 0) || 0
@@ -44,7 +41,7 @@ export default async function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard Overview</h1>
         <p className="text-muted-foreground">
-          Welcome back! Here's what's happening with your contributions.
+          Welcome back! Here&apos;s what&apos;s happening with your contributions.
         </p>
       </div>
 

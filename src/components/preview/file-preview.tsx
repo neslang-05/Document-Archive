@@ -79,7 +79,8 @@ export function FilePreview({ files, currentIndex = 0, onClose, open = true }: F
           )}
           
           {isImage && (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex items-center justify-center h-full relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={file.file_url}
                 alt={file.file_name}

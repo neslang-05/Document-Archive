@@ -9,10 +9,9 @@ import type { ResourceFile } from "@/types/database"
 interface ResourceActionsProps {
   files: ResourceFile[]
   primaryFileUrl: string
-  primaryFileName: string
 }
 
-export function ResourceActions({ files, primaryFileUrl, primaryFileName }: ResourceActionsProps) {
+export function ResourceActions({ files, primaryFileUrl }: ResourceActionsProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewIndex, setPreviewIndex] = useState(0)
 
