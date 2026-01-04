@@ -1,7 +1,7 @@
 {
-  "name": "MTU Resource Archive",
-  "short_name": "MTU Archive",
-  "description": "Community-Driven Academic Archiving and Resource Platform for MTU B.Tech CSE Students",
+  "name": "Academic Document Archive",
+  "short_name": "Archive",
+  "description": "Community-Driven Academic Archiving and Resource Platform for MTU Students",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0d1117",
