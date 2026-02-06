@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 
+/**
+ * OAuth callback handler.
+ * With Firebase Auth, OAuth is handled client-side via popup/redirect.
+ * This route now simply redirects to the dashboard.
+ * The actual session cookie is set by the client calling /auth/session.
+ */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
-  const code = searchParams.get("code")
   const next = searchParams.get("next") ?? "/dashboard"
 
-  if (code) {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
-    }
-  }
-
-  // Return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
+  return NextResponse.redirect(`${origin}${next}`)
 }

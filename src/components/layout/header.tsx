@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { auth, onAuthStateChanged } from "@/lib/firebase/client"
 import { HeaderClient } from "./header-client"
 
 interface User {
@@ -20,45 +20,45 @@ export function Header() {
   useEffect(() => {
     setMounted(true)
     
-    const fetchUser = async () => {
-      try {
-        const supabase = createClient()
-        const { data: { user: authUser } } = await supabase.auth.getUser()
-
-        if (authUser) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('id, email, full_name, avatar_url, role')
-            .eq('id', authUser.id)
-            .single()
-
-          if (profile) {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // Fetch profile from API
+          const res = await fetch("/api/user/profile")
+          if (res.ok) {
+            const profile = await res.json()
             setUser({
               id: profile.id,
-              email: profile.email || authUser.email || '',
-              full_name: profile.full_name,
-              avatar_url: profile.avatar_url,
+              email: profile.email || firebaseUser.email || '',
+              full_name: profile.full_name || firebaseUser.displayName,
+              avatar_url: profile.avatar_url || firebaseUser.photoURL,
               role: profile.role as "student" | "moderator" | "admin"
             })
           } else {
             setUser({
-              id: authUser.id,
-              email: authUser.email || '',
-              full_name: authUser.user_metadata?.full_name,
-              avatar_url: authUser.user_metadata?.avatar_url,
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              full_name: firebaseUser.displayName,
+              avatar_url: firebaseUser.photoURL,
               role: 'student'
             })
           }
-        } else {
-          setUser(null)
+        } catch (error) {
+          console.error('Error fetching user profile:', error)
+          setUser({
+            id: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            full_name: firebaseUser.displayName,
+            avatar_url: firebaseUser.photoURL,
+            role: 'student'
+          })
         }
-      } catch (error) {
-        console.error('Error fetching user:', error)
+      } else {
         setUser(null)
       }
-    }
+    })
 
-    fetchUser()
+    return () => unsubscribe()
   }, [])
 
   return <HeaderClient user={user} />

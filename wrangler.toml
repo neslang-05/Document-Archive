@@ -1,0 +1,31 @@
+name = "document-archive"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Pages deployment
+pages_build_output_dir = ".vercel/output/static"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "document-archive-db"
+database_id = "" # Fill after creating D1 database: npx wrangler d1 create document-archive-db
+
+# R2 Storage binding
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "document-archive-files"
+# Create with: npx wrangler r2 bucket create document-archive-files
+
+[vars]
+# Non-secret environment variables can go here
+ENVIRONMENT = "production"
+
+# For local development with wrangler pages dev
+[env.preview]
+name = "document-archive-preview"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "document-archive-db"
+database_id = "" # Same as above

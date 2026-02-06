@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/auth/session"
+import { getD1 } from "@/lib/db/d1"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Shield, Building2, BookOpen, Users, FileText, BarChart } from "lucide-react"
@@ -14,66 +15,68 @@ import { DepartmentManager } from "./department-manager"
 import { CourseManager } from "./course-manager"
 import { UserManager } from "./user-manager"
 
-export default async function AdminPage() {
-  const supabase = await createClient()
+export const dynamic = "force-dynamic"
 
-  // Check if user is logged in
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+export default async function AdminPage() {
+  const currentUser = await getCurrentUser()
+
+  if (!currentUser) {
     redirect("/auth/login")
   }
 
-  // Check if user has admin role
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
-  if (!profile || profile.role !== "admin") {
+  if (currentUser.profile.role !== "admin") {
     redirect("/dashboard")
   }
 
+  const db = getD1()
+
   // Fetch stats
-  const [
-    { count: departmentCount },
-    { count: courseCount },
-    { count: userCount },
-    { count: resourceCount },
-    { count: pendingCount },
-  ] = await Promise.all([
-    supabase.from("departments").select("*", { count: "exact", head: true }),
-    supabase.from("courses").select("*", { count: "exact", head: true }),
-    supabase.from("profiles").select("*", { count: "exact", head: true }),
-    supabase.from("resources").select("*", { count: "exact", head: true }),
-    supabase.from("resources").select("*", { count: "exact", head: true }).eq("status", "pending"),
+  const [deptCount, courseCount, userCount, resourceCount, pendingCount] = await Promise.all([
+    db.prepare("SELECT COUNT(*) as count FROM departments").first<{ count: number }>(),
+    db.prepare("SELECT COUNT(*) as count FROM courses").first<{ count: number }>(),
+    db.prepare("SELECT COUNT(*) as count FROM profiles").first<{ count: number }>(),
+    db.prepare("SELECT COUNT(*) as count FROM resources").first<{ count: number }>(),
+    db.prepare("SELECT COUNT(*) as count FROM resources WHERE status = 'pending'").first<{ count: number }>(),
   ])
 
-  // Fetch departments for course manager
-  const { data: departments } = await supabase
-    .from("departments")
-    .select("id, code, name")
-    .order("code")
+  const departmentCount = deptCount?.count ?? 0
+  const totalCourseCount = courseCount?.count ?? 0
+  const totalUserCount = userCount?.count ?? 0
+  const totalResourceCount = resourceCount?.count ?? 0
+  const totalPendingCount = pendingCount?.count ?? 0
 
-  // Fetch courses
-  const { data: courses } = await supabase
-    .from("courses")
-    .select("*, departments(code, name)")
-    .order("code")
+  // Fetch departments
+  const { results: departments } = await db
+    .prepare("SELECT id, code, name, description FROM departments ORDER BY code")
+    .all()
 
-  // Fetch users
-  const { data: users } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(50)
+  // Fetch courses with department join
+  const { results: courses } = await db
+    .prepare(`
+      SELECT c.*, d.code as dept_code, d.name as dept_name
+      FROM courses c
+      LEFT JOIN departments d ON c.department_id = d.id
+      ORDER BY c.code
+    `)
+    .all()
+
+  // Transform courses to include departments nested object for CourseManager
+  const coursesWithDepts = (courses || []).map((c: Record<string, unknown>) => ({
+    ...c,
+    departments: c.dept_code ? { code: c.dept_code as string, name: c.dept_name as string } : null,
+  }))
+
+  // Fetch users (last 50)
+  const { results: users } = await db
+    .prepare("SELECT * FROM profiles ORDER BY created_at DESC LIMIT 50")
+    .all()
 
   const stats = [
-    { label: "Departments", value: departmentCount || 0, icon: Building2 },
-    { label: "Courses", value: courseCount || 0, icon: BookOpen },
-    { label: "Users", value: userCount || 0, icon: Users },
-    { label: "Resources", value: resourceCount || 0, icon: FileText },
-    { label: "Pending", value: pendingCount || 0, icon: BarChart },
+    { label: "Departments", value: departmentCount, icon: Building2 },
+    { label: "Courses", value: totalCourseCount, icon: BookOpen },
+    { label: "Users", value: totalUserCount, icon: Users },
+    { label: "Resources", value: totalResourceCount, icon: FileText },
+    { label: "Pending", value: totalPendingCount, icon: BarChart },
   ]
 
   return (
@@ -102,8 +105,8 @@ export default async function AdminPage() {
               <Button variant="outline" className="gap-2">
                 <Shield className="h-4 w-4" />
                 Moderation Queue
-                {(pendingCount ?? 0) > 0 && (
-                  <Badge variant="secondary">{pendingCount}</Badge>
+                {(totalPendingCount) > 0 && (
+                  <Badge variant="secondary">{totalPendingCount}</Badge>
                 )}
               </Button>
             </Link>
@@ -142,15 +145,15 @@ export default async function AdminPage() {
             </TabsList>
 
             <TabsContent value="departments">
-              <DepartmentManager departments={departments || []} />
+              <DepartmentManager departments={(departments || []) as any[]} />
             </TabsContent>
 
             <TabsContent value="courses">
-              <CourseManager courses={courses || []} departments={departments || []} />
+              <CourseManager courses={coursesWithDepts as any[]} departments={(departments || []) as any[]} />
             </TabsContent>
 
             <TabsContent value="users">
-              <UserManager users={users || []} />
+              <UserManager users={(users || []) as any[]} />
             </TabsContent>
           </Tabs>
         </div>

@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/auth/session"
+import { getD1, type ResourceRow } from "@/lib/db/d1"
 import { redirect } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -14,25 +15,23 @@ import { formatNumber, formatDate } from "@/lib/utils"
 import Link from "next/link"
 
 export default async function SubmissionsPage() {
-  const supabase = await createClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
+  const currentUser = await getCurrentUser()
+
+  if (!currentUser) {
     redirect("/auth/login")
   }
 
-  const { data: submissions } = await supabase
-    .from('resources')
-    .select(`
-      *,
-      courses (
-        code,
-        name
-      )
+  const db = getD1()
+  const { results: submissions } = await db
+    .prepare(`
+      SELECT r.*, c.code as course_code, c.name as course_name
+      FROM resources r
+      LEFT JOIN courses c ON r.course_id = c.id
+      WHERE r.uploader_id = ?
+      ORDER BY r.created_at DESC
     `)
-    .eq('uploader_id', user.id)
-    .order('created_at', { ascending: false })
+    .bind(currentUser.firebaseUser.uid)
+    .all<ResourceRow & { course_code: string | null; course_name: string | null }>()
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -61,7 +60,7 @@ export default async function SubmissionsPage() {
                     <h3 className="font-semibold text-base sm:text-lg wrap-break-word">{submission.title}</h3>
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground mt-1">
                       <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">
-                        {submission.courses?.code}
+                        {submission.course_code}
                       </span>
                       <span className="hidden sm:inline">•</span>
                       <span className="capitalize">{submission.category.replace('_', ' ')}</span>

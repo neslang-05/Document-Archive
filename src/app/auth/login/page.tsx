@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { BookOpen, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react"
@@ -9,7 +9,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { createClient } from "@/lib/supabase/client"
+import {
+  auth,
+  googleProvider,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  setSessionCookie,
+} from "@/lib/firebase/client"
+import { TurnstileWidget } from "@/components/ui/turnstile"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -18,27 +25,48 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+
+  const handleTurnstileVerify = useCallback((token: string) => {
+    setTurnstileToken(token)
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
 
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+    if (!turnstileToken) {
+      setError("Please complete the verification challenge")
+      setIsLoading(false)
+      return
+    }
 
-      if (error) {
-        setError(error.message)
-      } else {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      if (userCredential.user) {
+        // Set session cookie for server-side auth
+        await setSessionCookie()
+
+        // Ensure profile exists in D1 (via API)
+        await fetch("/api/auth/ensure-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ turnstileToken }),
+        })
+
         router.push("/dashboard")
         router.refresh()
       }
-    } catch {
-      setError("An unexpected error occurred")
+    } catch (err) {
+      const firebaseError = err as { code?: string; message?: string }
+      if (firebaseError.code === "auth/invalid-credential") {
+        setError("Invalid email or password")
+      } else if (firebaseError.code === "auth/user-not-found") {
+        setError("No account found with this email")
+      } else {
+        setError(firebaseError.message || "An unexpected error occurred")
+      }
     } finally {
       setIsLoading(false)
     }
@@ -48,31 +76,22 @@ export default function LoginPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const supabase = createClient()
-      
-      // Check if Supabase is configured
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'your_supabase_project_url') {
-        setError("Authentication is not configured. Please set up Supabase credentials.")
-        setIsLoading(false)
-        return
+      const result = await signInWithPopup(auth, googleProvider)
+      if (result.user) {
+        await setSessionCookie()
+
+        await fetch("/api/auth/ensure-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ turnstileToken: turnstileToken || "google-oauth" }),
+        })
+
+        router.push("/dashboard")
+        router.refresh()
       }
-      
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      })
-      if (error) {
-        setError(error.message)
-        setIsLoading(false)
-      }
-    } catch {
-      setError("An unexpected error occurred. Please try again.")
+    } catch (err) {
+      const firebaseError = err as { message?: string }
+      setError(firebaseError.message || "An unexpected error occurred. Please try again.")
       setIsLoading(false)
     }
   }

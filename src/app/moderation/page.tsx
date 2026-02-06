@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/auth/session"
+import { getD1 } from "@/lib/db/d1"
 import { redirect } from "next/navigation"
 import { 
   Shield, 
@@ -15,6 +16,8 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatDate } from "@/lib/utils"
 import { ModerationActions } from "./moderation-actions"
+
+export const dynamic = "force-dynamic"
 
 const categoryLabels: Record<string, string> = {
   question_paper: "Question Paper",
@@ -39,64 +42,56 @@ const categoryColors: Record<string, string> = {
 }
 
 export default async function ModerationPage() {
-  const supabase = await createClient()
+  const currentUser = await getCurrentUser()
 
-  // Check if user is logged in
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  if (!currentUser) {
     redirect("/auth/login")
   }
 
-  // Check if user has moderator or admin role
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
-  if (!profile || !["moderator", "admin"].includes(profile.role)) {
+  if (!["moderator", "admin"].includes(currentUser.profile.role)) {
     redirect("/dashboard")
   }
 
-  // Fetch pending submissions
-  const { data: pendingSubmissions, error: pendingError } = await supabase
-    .from("resources")
-    .select(`
-      *,
-      courses (code, name),
-      uploader:profiles!resources_uploader_id_fkey (full_name, email)
-    `)
-    .eq("status", "pending")
-    .order("created_at", { ascending: true })
+  const db = getD1()
 
-  // Log any errors for debugging
-  if (pendingError) {
-    console.error("Error fetching pending submissions:", pendingError)
-  }
+  // Fetch pending submissions with JOINs
+  const { results: pendingSubmissions } = await db
+    .prepare(`
+      SELECT r.*, c.code as course_code, c.name as course_name,
+             p.full_name as uploader_name, p.email as uploader_email
+      FROM resources r
+      LEFT JOIN courses c ON r.course_id = c.id
+      LEFT JOIN profiles p ON r.uploader_id = p.id
+      WHERE r.status = 'pending'
+      ORDER BY r.created_at ASC
+    `)
+    .all()
 
   // Fetch recently reviewed (last 20)
-  const { data: recentlyReviewed, error: reviewedError } = await supabase
-    .from("resources")
-    .select(`
-      *,
-      courses (code, name),
-      uploader:profiles!resources_uploader_id_fkey (full_name, email)
+  const { results: recentlyReviewed } = await db
+    .prepare(`
+      SELECT r.*, c.code as course_code, c.name as course_name,
+             p.full_name as uploader_name, p.email as uploader_email
+      FROM resources r
+      LEFT JOIN courses c ON r.course_id = c.id
+      LEFT JOIN profiles p ON r.uploader_id = p.id
+      WHERE r.status IN ('approved', 'rejected')
+      ORDER BY r.approved_at DESC
+      LIMIT 20
     `)
-    .in("status", ["approved", "rejected"])
-    .order("approved_at", { ascending: false })
-    .limit(20)
-
-  if (reviewedError) {
-    console.error("Error fetching reviewed submissions:", reviewedError)
-  }
+    .all()
 
   // Fetch files for all pending submissions
-  const pendingIds = pendingSubmissions?.map(s => s.id) || []
-  const { data: allFiles } = await supabase
-    .from("resource_files")
-    .select("*")
-    .in("resource_id", pendingIds)
-    .order("file_order")
+  const pendingIds = (pendingSubmissions || []).map((s: any) => s.id as string)
+  let allFiles: any[] = []
+  if (pendingIds.length > 0) {
+    const placeholders = pendingIds.map(() => '?').join(',')
+    const { results } = await db
+      .prepare(`SELECT * FROM resource_files WHERE resource_id IN (${placeholders}) ORDER BY file_order`)
+      .bind(...pendingIds)
+      .all()
+    allFiles = results || []
+  }
 
   // Create a map of resource_id to files
   const filesMap = new Map<string, Array<{ id: string; resource_id: string; file_url: string; file_name: string; file_size: number; file_type: string; file_order: number; created_at: string }>>()
@@ -142,36 +137,6 @@ export default async function ModerationPage() {
             </Badge>
           </div>
 
-          {/* Show errors if any */}
-          {(pendingError || reviewedError) && (
-            <Card className="mb-8 border-destructive">
-              <CardHeader>
-                <CardTitle className="text-destructive">Error Loading Data</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {pendingError && (
-                  <div className="mb-2">
-                    <p className="font-medium">Pending submissions error:</p>
-                    <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
-                      {JSON.stringify(pendingError, null, 2)}
-                    </pre>
-                  </div>
-                )}
-                {reviewedError && (
-                  <div>
-                    <p className="font-medium">Recently reviewed error:</p>
-                    <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
-                      {JSON.stringify(reviewedError, null, 2)}
-                    </pre>
-                  </div>
-                )}
-                <p className="mt-4 text-sm text-muted-foreground">
-                  This usually means RLS policies need to be updated. Please run the fix-resources-rls.sql file in your Supabase SQL Editor.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Pending Submissions */}
           <Card className="mb-8">
             <CardHeader>
@@ -215,13 +180,13 @@ export default async function ModerationPage() {
                           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <FileText className="h-4 w-4" />
-                              <span className="font-mono">{submission.courses?.code}</span>
+                              <span className="font-mono">{submission.course_code}</span>
                               {" - "}
-                              {submission.courses?.name}
+                              {submission.course_name}
                             </span>
                             <span className="flex items-center gap-1">
                               <User className="h-4 w-4" />
-                              {submission.uploader?.full_name || submission.uploader?.email || "Unknown"}
+                              {submission.uploader_name || submission.uploader_email || "Unknown"}
                             </span>
                             <span className="flex items-center gap-1">
                               <Clock className="h-4 w-4" />
@@ -292,7 +257,7 @@ export default async function ModerationPage() {
                         <div>
                           <p className="font-medium">{submission.title}</p>
                           <p className="text-sm text-muted-foreground">
-                            {submission.courses?.code} • {formatDate(submission.approved_at || submission.created_at)}
+                            {submission.course_code} • {formatDate(submission.approved_at || submission.created_at)}
                           </p>
                         </div>
                       </div>

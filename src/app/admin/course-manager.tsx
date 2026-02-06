@@ -24,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createClient } from "@/lib/supabase/client"
 
 interface Department {
   id: string
@@ -92,7 +91,6 @@ export function CourseManager({ courses: initialCourses, departments }: CourseMa
     if (!form.code.trim() || !form.name.trim() || !form.department_id) return
 
     setIsLoading(true)
-    const supabase = createClient()
 
     const courseData = {
       code: form.code.trim().toUpperCase(),
@@ -104,12 +102,13 @@ export function CourseManager({ courses: initialCourses, departments }: CourseMa
     }
 
     if (editingCourse) {
-      const { error } = await supabase
-        .from("courses")
-        .update(courseData)
-        .eq("id", editingCourse.id)
+      const res = await fetch("/api/courses", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingCourse.id, ...courseData }),
+      })
 
-      if (!error) {
+      if (res.ok) {
         const dept = departments.find((d) => d.id === form.department_id)
         setCourses((prev) =>
           prev.map((c) =>
@@ -120,13 +119,14 @@ export function CourseManager({ courses: initialCourses, departments }: CourseMa
         )
       }
     } else {
-      const { data, error } = await supabase
-        .from("courses")
-        .insert(courseData)
-        .select("*, departments(code, name)")
-        .single()
+      const res = await fetch("/api/courses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(courseData),
+      })
 
-      if (!error && data) {
+      if (res.ok) {
+        const data = await res.json()
         setCourses((prev) => [...prev, data])
       }
     }
@@ -141,10 +141,9 @@ export function CourseManager({ courses: initialCourses, departments }: CourseMa
       return
     }
 
-    const supabase = createClient()
-    const { error } = await supabase.from("courses").delete().eq("id", id)
+    const res = await fetch(`/api/courses?id=${id}`, { method: "DELETE" })
 
-    if (!error) {
+    if (res.ok) {
       setCourses((prev) => prev.filter((c) => c.id !== id))
       router.refresh()
     }

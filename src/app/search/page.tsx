@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { getD1 } from "@/lib/db/d1"
 import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,8 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
+export const dynamic = "force-dynamic"
+
 export default async function SearchPage({
   searchParams,
 }: {
@@ -15,28 +17,27 @@ export default async function SearchPage({
 }) {
   const { q } = await searchParams
   const query = q || ""
-  const supabase = await createClient()
+  const db = getD1()
 
-  let resources: Array<{ id: string; title: string; category?: string; courses?: { code: string; name: string } | null }> = []
-  let courses: Array<{ id: string; code: string; name: string; semester: number }> = []
+  let resources: any[] = []
+  let courses: any[] = []
 
   if (query) {
     const [resourcesResult, coursesResult] = await Promise.all([
-      supabase
-        .from('resources')
-        .select('*, courses(code, name)')
-        .eq('status', 'approved')
-        .ilike('title', `%${query}%`)
-        .limit(20),
-      supabase
-        .from('courses')
-        .select('*')
-        .or(`name.ilike.%${query}%,code.ilike.%${query}%`)
-        .limit(20)
+      db.prepare(`
+        SELECT r.id, r.title, r.category, c.code as course_code, c.name as course_name
+        FROM resources r
+        LEFT JOIN courses c ON r.course_id = c.id
+        WHERE r.status = 'approved' AND r.title LIKE ?
+        LIMIT 20
+      `).bind(`%${query}%`).all(),
+      db.prepare(`
+        SELECT * FROM courses WHERE name LIKE ? OR code LIKE ? LIMIT 20
+      `).bind(`%${query}%`, `%${query}%`).all(),
     ])
-    
-    resources = resourcesResult.data || []
-    courses = coursesResult.data || []
+
+    resources = resourcesResult.results || []
+    courses = coursesResult.results || []
   }
 
   return (
@@ -106,9 +107,9 @@ export default async function SearchPage({
                             <h3 className="font-medium">{resource.title}</h3>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                               <span className="font-mono bg-muted px-1 rounded text-xs">
-                                {resource.courses?.code}
+                                {resource.course_code as string}
                               </span>
-                              <span className="capitalize">{resource.category?.replace('_', ' ')}</span>
+                              <span className="capitalize">{(resource.category as string)?.replace('_', ' ')}</span>
                             </div>
                           </div>
                         </CardContent>

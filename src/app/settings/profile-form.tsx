@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,7 +16,6 @@ export function ProfileForm({ user }: { user: UserProfile }) {
   const [fullName, setFullName] = useState(user.full_name || "")
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState("")
-  const supabase = createClient()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,16 +23,21 @@ export function ProfileForm({ user }: { user: UserProfile }) {
     setLoading(true)
     setMessage("")
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ full_name: fullName })
-      .eq('id', user.id)
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: fullName }),
+      })
 
-    if (error) {
+      if (res.ok) {
+        setMessage("Profile updated successfully")
+        router.refresh()
+      } else {
+        setMessage("Error updating profile")
+      }
+    } catch {
       setMessage("Error updating profile")
-    } else {
-      setMessage("Profile updated successfully")
-      router.refresh()
     }
     setLoading(false)
   }

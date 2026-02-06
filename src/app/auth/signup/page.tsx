@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import Link from "next/link"
 import { BookOpen, Mail, Lock, Eye, EyeOff, Loader2, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,9 +8,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { createClient } from "@/lib/supabase/client"
+import {
+  auth,
+  googleProvider,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  updateProfile,
+  setSessionCookie,
+} from "@/lib/firebase/client"
+import { TurnstileWidget } from "@/components/ui/turnstile"
+import { useRouter } from "next/navigation"
 
 export default function SignupPage() {
+  const router = useRouter()
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -19,6 +29,11 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+
+  const handleTurnstileVerify = useCallback((token: string) => {
+    setTurnstileToken(token)
+  }, [])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,34 +52,43 @@ export default function SignupPage() {
       return
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the verification challenge")
+      setIsLoading(false)
+      return
+    }
+
     try {
-      const supabase = createClient()
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       
-      // Check if Supabase is configured
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'your_supabase_project_url') {
-        setError("Authentication is not configured. Please set up Supabase credentials.")
-        setIsLoading(false)
-        return
+      // Set display name
+      if (userCredential.user && fullName) {
+        await updateProfile(userCredential.user, { displayName: fullName })
       }
-      
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+
+      // Set session cookie
+      await setSessionCookie()
+
+      // Create profile in D1
+      await fetch("/api/auth/ensure-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          turnstileToken,
+          fullName,
+        }),
       })
 
-      if (error) {
-        setError(error.message)
+      setSuccess(true)
+    } catch (err) {
+      const firebaseError = err as { code?: string; message?: string }
+      if (firebaseError.code === "auth/email-already-in-use") {
+        setError("An account with this email already exists")
+      } else if (firebaseError.code === "auth/weak-password") {
+        setError("Password is too weak. Please use at least 8 characters")
       } else {
-        setSuccess(true)
+        setError(firebaseError.message || "An unexpected error occurred")
       }
-    } catch {
-      setError("An unexpected error occurred")
     } finally {
       setIsLoading(false)
     }
@@ -74,31 +98,22 @@ export default function SignupPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const supabase = createClient()
-      
-      // Check if Supabase is configured
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'your_supabase_project_url') {
-        setError("Authentication is not configured. Please set up Supabase credentials.")
-        setIsLoading(false)
-        return
+      const result = await signInWithPopup(auth, googleProvider)
+      if (result.user) {
+        await setSessionCookie()
+
+        await fetch("/api/auth/ensure-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ turnstileToken: turnstileToken || "google-oauth" }),
+        })
+
+        router.push("/dashboard")
+        router.refresh()
       }
-      
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      })
-      if (error) {
-        setError(error.message)
-        setIsLoading(false)
-      }
-    } catch {
-      setError("An unexpected error occurred. Please try again.")
+    } catch (err) {
+      const firebaseError = err as { message?: string }
+      setError(firebaseError.message || "An unexpected error occurred. Please try again.")
       setIsLoading(false)
     }
   }
@@ -296,6 +311,8 @@ export default function SignupPage() {
                 />
               </div>
             </div>
+
+            <TurnstileWidget onVerify={handleTurnstileVerify} className="flex justify-center" />
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (

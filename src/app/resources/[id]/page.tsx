@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/auth/session"
+import { getD1 } from "@/lib/db/d1"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { 
@@ -17,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { formatDate, formatNumber } from "@/lib/utils"
 import { ResourceActions } from "@/components/resource/resource-actions"
+
+export const dynamic = "force-dynamic"
 
 const categoryLabels: Record<string, string> = {
   question_paper: "Question Paper",
@@ -41,44 +44,46 @@ const categoryColors: Record<string, string> = {
 }
 
 export default async function ResourcePage({ params }: { params: Promise<{ id: string }> }) {
-  const supabase = await createClient()
+  const db = getD1()
   const { id } = await params
 
   // Check if user is logged in
-  const { data: { user } } = await supabase.auth.getUser()
+  const currentUser = await getCurrentUser()
   
-  // Fetch resource with related data (check before auth to see if resource exists)
-  const { data: resource, error } = await supabase
-    .from("resources")
-    .select(`
-      *,
-      courses (code, name, semester, credits, departments(code, name)),
-      uploader:profiles!resources_uploader_id_fkey (full_name, email)
+  // Fetch resource with related data
+  const resource = await db
+    .prepare(`
+      SELECT r.*, c.code as course_code, c.name as course_name, c.semester as course_semester,
+             c.credits as course_credits, d.code as dept_code, d.name as dept_name,
+             p.full_name as uploader_name, p.email as uploader_email
+      FROM resources r
+      LEFT JOIN courses c ON r.course_id = c.id
+      LEFT JOIN departments d ON c.department_id = d.id
+      LEFT JOIN profiles p ON r.uploader_id = p.id
+      WHERE r.id = ?
     `)
-    .eq("id", id)
-    .single()
+    .bind(id)
+    .first<any>()
 
-  if (error || !resource) {
+  if (!resource) {
     notFound()
   }
 
-  // Now check authentication for non-approved resources
+  // Now check auth for non-approved resources
   if (resource.status !== "approved") {
-    if (!user) {
+    if (!currentUser) {
       redirect("/auth/login")
     }
-    // Only owner can see pending/rejected
-    if (resource.uploader_id !== user.id) {
+    if (resource.uploader_id !== currentUser.firebaseUser.uid) {
       redirect("/dashboard")
     }
   }
 
   // Fetch all files for this resource
-  const { data: resourceFiles } = await supabase
-    .from("resource_files")
-    .select("*")
-    .eq("resource_id", id)
-    .order("file_order")
+  const { results: resourceFiles } = await db
+    .prepare("SELECT * FROM resource_files WHERE resource_id = ? ORDER BY file_order")
+    .bind(id)
+    .all()
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + " B"
@@ -95,8 +100,8 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
           <Breadcrumbs
             items={[
               { label: "Courses", href: "/courses" },
-              { label: resource.courses.code, href: `/courses/${resource.course_id}` },
-              { label: resource.title },
+              { label: resource.course_code as string, href: `/courses/${resource.course_id}` },
+              { label: resource.title as string },
             ]}
             className="mb-6"
           />
@@ -107,7 +112,7 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
             className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
-            Back to {resource.courses.code}
+            Back to {resource.course_code as string}
           </Link>
 
           {/* Status Banner for Pending/Rejected */}
@@ -163,9 +168,9 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
                   href={`/courses/${resource.course_id}`}
                   className="flex items-center gap-1 hover:text-foreground"
                 >
-                  <span className="font-mono font-medium">{resource.courses.code}</span>
+                  <span className="font-mono font-medium">{resource.course_code as string}</span>
                   <span>•</span>
-                  <span>{resource.courses.name}</span>
+                  <span>{resource.course_name as string}</span>
                 </Link>
               </div>
 
@@ -274,20 +279,20 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
               <CardContent className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Code</span>
-                  <span className="font-mono font-medium">{resource.courses.code}</span>
+                  <span className="font-mono font-medium">{resource.course_code as string}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Name</span>
-                  <span className="text-right">{resource.courses.name}</span>
+                  <span className="text-right">{resource.course_name as string}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Semester</span>
-                  <span>{resource.courses.semester}</span>
+                  <span>{resource.course_semester as number}</span>
                 </div>
-                {resource.courses.credits && (
+                {resource.course_credits && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Credits</span>
-                    <span>{resource.courses.credits}</span>
+                    <span>{resource.course_credits as number}</span>
                   </div>
                 )}
               </CardContent>
@@ -305,10 +310,10 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
             <CardContent>
               <div className="flex items-center gap-3 text-sm">
                 <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-medium">
-                  {resource.uploader?.full_name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U'}
+                  {(resource.uploader_name as string)?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U'}
                 </div>
                 <div>
-                  <p className="font-medium">{resource.uploader?.full_name || "Anonymous"}</p>
+                  <p className="font-medium">{(resource.uploader_name as string) || "Anonymous"}</p>
                   <p className="text-muted-foreground flex items-center gap-1">
                     <Clock className="h-3 w-3" />
                     {formatDate(resource.created_at)}

@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MoreVertical } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
 
 interface SubmissionActionsProps {
   resourceId: string
@@ -35,60 +34,18 @@ export default function SubmissionActions({ resourceId }: SubmissionActionsProps
 
   const handleDelete = async () => {
     setIsDeleting(true)
-    const supabase = createClient()
 
     try {
-      // First, fetch all files associated with this resource
-      const { data: resourceFiles, error: fetchError } = await supabase
-        .from("resource_files")
-        .select("file_url")
-        .eq("resource_id", resourceId)
+      const res = await fetch(`/api/resources/${resourceId}`, {
+        method: "DELETE",
+      })
 
-      if (fetchError) {
-        console.error("Error fetching resource files:", fetchError)
-        alert("Failed to fetch resource files. Please try again.")
-        setIsDeleting(false)
-        return
-      }
-
-      // Delete all files from storage
-      if (resourceFiles && resourceFiles.length > 0) {
-        // Extract storage paths from file URLs
-        const filePaths = resourceFiles
-          .map(f => {
-            // Extract path from Supabase storage URL
-            const url = f.file_url
-            const match = url.match(/\/storage\/v1\/object\/public\/resourses\/(.+)/)
-            return match ? match[1] : null
-          })
-          .filter((path): path is string => path !== null)
-        
-        if (filePaths.length > 0) {
-          const { error: storageError } = await supabase.storage
-            .from("resourses")
-            .remove(filePaths)
-
-          if (storageError) {
-            console.error("Error deleting files from storage:", storageError)
-            // Continue anyway - the database cascade will clean up references
-          }
-        }
-      }
-
-      // Delete the resource (cascade will delete resource_files entries)
-      const { error: deleteError } = await supabase
-        .from("resources")
-        .delete()
-        .eq("id", resourceId)
-
-      if (deleteError) {
-        console.error("Error deleting resource:", deleteError)
+      if (!res.ok) {
         alert("Failed to delete resource. Please try again.")
         setIsDeleting(false)
         return
       }
 
-      // Success - refresh the page
       router.refresh()
       setShowDeleteDialog(false)
     } catch (error) {

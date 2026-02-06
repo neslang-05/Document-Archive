@@ -28,7 +28,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client"
 import type { ResourceCategory, ExamType } from "@/types/database"
 
 const steps = [
@@ -243,120 +242,29 @@ export default function SubmitPage() {
     setErrors({})
 
     try {
-      const supabase = createClient()
+      const body = new FormData()
+      body.append("courseCode", formData.courseCode)
+      body.append("title", formData.title.trim())
+      body.append("description", formData.description.trim())
+      body.append("category", formData.category)
+      body.append("examType", formData.examType || "")
+      body.append("year", formData.year)
 
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError || !user) {
-        setErrors({ submit: "You must be logged in to submit a resource" })
-        setIsSubmitting(false)
-        return
-      }
-
-      // Look up course ID from course code
-      const { data: courseData, error: courseError } = await supabase
-        .from("courses")
-        .select("id")
-        .eq("code", formData.courseCode)
-        .single()
-
-      if (courseError || !courseData) {
-        setErrors({ submit: "Could not find the selected course" })
-        setIsSubmitting(false)
-        return
-      }
-
-      // First create the resource record (using first file for primary data)
-      const primaryFile = files[0]
-      const primaryFileName = `${user.id}/${Date.now()}_${primaryFile.name}`
-
-      // Upload primary file to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from("resourses")
-        .upload(primaryFileName, primaryFile, {
-          cacheControl: "3600",
-          upsert: false,
-        })
-
-      if (uploadError) {
-        setErrors({ submit: `File upload failed: ${uploadError.message}` })
-        setIsSubmitting(false)
-        return
-      }
-
-      // Get public URL for the primary file
-      const { data: urlData } = supabase.storage
-        .from("resourses")
-        .getPublicUrl(primaryFileName)
-
-      // Insert resource record
-      const { data: resourceData, error: insertError } = await supabase
-        .from("resources")
-        .insert({
-          course_id: courseData.id,
-          uploader_id: user.id,
-          title: formData.title.trim(),
-          description: formData.description.trim() || null,
-          category: formData.category as ResourceCategory,
-          exam_type: (formData.examType || null) as ExamType | null,
-          year: parseInt(formData.year, 10),
-          file_url: urlData.publicUrl,
-          file_name: primaryFile.name,
-          file_size: primaryFile.size,
-          file_type: primaryFile.type,
-          status: "pending",
-        })
-        .select()
-        .single()
-
-      if (insertError || !resourceData) {
-        // Clean up uploaded file if DB insert fails
-        await supabase.storage.from("resourses").remove([primaryFileName])
-        setErrors({ submit: `Failed to save resource: ${insertError?.message || "Unknown error"}` })
-        setIsSubmitting(false)
-        return
-      }
-
-      // Upload all files and create resource_files entries
-      const fileUploadPromises = files.map(async (file, index) => {
-        try {
-          const fileName = `${user.id}/${resourceData.id}/${Date.now()}_${index}_${file.name}`
-          
-          const { error: fileUploadError } = await supabase.storage
-            .from("resourses")
-            .upload(fileName, file, {
-              cacheControl: "3600",
-              upsert: false,
-            })
-
-          if (fileUploadError) throw fileUploadError
-
-          const { data: fileUrlData } = supabase.storage
-            .from("resourses")
-            .getPublicUrl(fileName)
-
-          // Insert into resource_files table
-          const { error: fileInsertError } = await supabase
-            .from("resource_files")
-            .insert({
-              resource_id: resourceData.id,
-              file_url: fileUrlData.publicUrl,
-              file_name: file.name,
-              file_size: file.size,
-              file_type: file.type,
-              file_order: index,
-            })
-
-          if (fileInsertError) throw fileInsertError
-          
-          return { success: true }
-        } catch (err) {
-          console.error(`Failed to upload ${file.name}:`, err)
-          return { success: false, error: err }
-        }
+      files.forEach((file, index) => {
+        body.append(`file_${index}`, file)
       })
 
-      await Promise.all(fileUploadPromises)
+      const res = await fetch("/api/resources", {
+        method: "POST",
+        body,
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Upload failed" }))
+        setErrors({ submit: data.error || "An error occurred" })
+        setIsSubmitting(false)
+        return
+      }
 
       setIsSubmitting(false)
       setSubmitted(true)
@@ -370,21 +278,21 @@ export default function SubmitPage() {
   useEffect(() => {
     const fetchDepartments = async () => {
       setIsDepartmentsLoading(true)
-      const supabase = createClient()
 
-      const { data, error } = await supabase
-        .from("departments")
-        .select("id, code, name")
-        .order("code")
-
-      if (error) {
-        setDepartmentOptions([])
-      } else {
-        setDepartmentOptions((data as DepartmentOption[]) || [])
-        if (!data?.some((d) => d.code === formData.department)) {
-          updateFormData("department", "")
-          updateFormData("courseCode", "")
+      try {
+        const res = await fetch("/api/departments")
+        if (res.ok) {
+          const data = await res.json()
+          setDepartmentOptions(data as DepartmentOption[])
+          if (!data?.some((d: DepartmentOption) => d.code === formData.department)) {
+            updateFormData("department", "")
+            updateFormData("courseCode", "")
+          }
+        } else {
+          setDepartmentOptions([])
         }
+      } catch {
+        setDepartmentOptions([])
       }
 
       setIsDepartmentsLoading(false)
@@ -403,24 +311,26 @@ export default function SubmitPage() {
       }
 
       setIsCoursesLoading(true)
-      const supabase = createClient()
 
-      // Filter by department code via join to departments table
-      const { data, error } = await supabase
-        .from("courses")
-        .select("id, code, name, semester, departments!inner(id, code, name)")
-        .eq("departments.code", formData.department)
-        .eq("semester", Number(formData.semester))
-        .order("code")
-
-      if (error) {
-        setCourseOptions([])
-      } else {
-        setCourseOptions((data as CourseOption[]) || [])
-        // Clear selection if it no longer exists in filtered options
-        if (!data?.some((c) => c.code === formData.courseCode)) {
-          updateFormData("courseCode", "")
+      try {
+        const res = await fetch("/api/courses")
+        if (res.ok) {
+          const allCourses = await res.json()
+          // Filter by department code and semester
+          const filtered = allCourses.filter(
+            (c: CourseOption & { departments?: { code: string } }) =>
+              c.departments?.code === formData.department &&
+              c.semester === Number(formData.semester)
+          )
+          setCourseOptions(filtered as CourseOption[])
+          if (!filtered?.some((c: CourseOption) => c.code === formData.courseCode)) {
+            updateFormData("courseCode", "")
+          }
+        } else {
+          setCourseOptions([])
         }
+      } catch {
+        setCourseOptions([])
       }
 
       setIsCoursesLoading(false)
