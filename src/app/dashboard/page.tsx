@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/auth/session"
+import { getD1 } from "@/lib/db/d1"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileText, Download, Bookmark, Upload } from "lucide-react"
@@ -7,34 +8,31 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
+  const currentUser = await getCurrentUser()
   
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
+  if (!currentUser) {
     redirect("/auth/login")
   }
 
-  // Fetch user stats
-  const [
-    { count: uploadCount },
-    { data: uploads },
-    { count: bookmarkCount },
-  ] = await Promise.all([
-    supabase.from('resources').select('*', { count: 'exact', head: true }).eq('uploader_id', user.id),
-    supabase.from('resources').select('download_count').eq('uploader_id', user.id),
-    supabase.from('bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+  const db = getD1()
+  const userId = currentUser.profile.id
+
+  // Fetch user stats in parallel
+  const [uploadCountResult, uploadsResult, bookmarkCountResult] = await Promise.all([
+    db.prepare('SELECT COUNT(*) as count FROM resources WHERE uploader_id = ?').bind(userId).first<{ count: number }>(),
+    db.prepare('SELECT download_count FROM resources WHERE uploader_id = ?').bind(userId).all<{ download_count: number }>(),
+    db.prepare('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?').bind(userId).first<{ count: number }>(),
   ])
 
-  const totalDownloads = uploads?.reduce((sum, item) => sum + (item.download_count || 0), 0) || 0
+  const uploadCount = uploadCountResult?.count || 0
+  const totalDownloads = uploadsResult?.results?.reduce((sum, item) => sum + (item.download_count || 0), 0) || 0
+  const bookmarkCount = bookmarkCountResult?.count || 0
 
-  // Fetch recent uploads for activity list
-  const { data: recentUploads } = await supabase
-    .from('resources')
-    .select('id, title, created_at, status')
-    .eq('uploader_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(5)
+  // Fetch recent uploads
+  const { results: recentUploads } = await db
+    .prepare('SELECT id, title, created_at, status FROM resources WHERE uploader_id = ? ORDER BY created_at DESC LIMIT 5')
+    .bind(userId)
+    .all<{ id: string; title: string; created_at: string; status: string }>()
 
   return (
     <div className="p-6 space-y-8">

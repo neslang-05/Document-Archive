@@ -1,26 +1,17 @@
-import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
 import { ProfileForm } from "./profile-form"
 import { HeaderServer } from "@/components/layout/header-server"
 import { Footer } from "@/components/layout/footer"
 
 export default async function SettingsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const currentUser = await getCurrentUser()
 
-  if (!user) {
+  if (!currentUser) {
     redirect("/auth/login")
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile) {
-    redirect("/auth/login")
-  }
+  const profile = currentUser.profile
 
   return (
     <div className="flex min-h-screen flex-col">

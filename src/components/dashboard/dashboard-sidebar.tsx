@@ -11,7 +11,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
+import { auth, signOut, clearSessionCookie } from "@/lib/firebase/client"
 import { useRouter } from "next/navigation"
 
 const sidebarItems = [
@@ -40,10 +40,10 @@ const sidebarItems = [
 export function DashboardSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    await signOut(auth)
+    await clearSessionCookie()
     router.push("/")
     router.refresh()
   }

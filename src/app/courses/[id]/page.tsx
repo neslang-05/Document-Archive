@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatDate, formatNumber } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client"
+
 type Course = {
   id: string
   code: string
@@ -39,7 +39,8 @@ type Course = {
   credits?: number | null
   department_id?: string
   description?: string | null
-  departments?: { code: string; name: string } | null
+  dept_name?: string | null
+  dept_code?: string | null
 }
 
 type Resource = {
@@ -51,7 +52,8 @@ type Resource = {
   created_at?: string | null
   download_count?: number | null
   average_rating?: number | null
-  courses?: { code?: string | null; name?: string | null } | null
+  course_code?: string | null
+  course_name?: string | null
   uploader_id?: string | null
 }
 
@@ -93,7 +95,6 @@ export default function CoursePage() {
       setIsLoading(true)
       setError(null)
       try {
-        const supabase = createClient()
         const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id
         if (!rawId) {
           setError("Course not found")
@@ -102,27 +103,11 @@ export default function CoursePage() {
         }
 
         const courseId = decodeURIComponent(rawId)
-        const selectColumns = "id, code, name, semester, credits, department_id, description, departments(code, name)"
 
-        const { data: courseExact } = await supabase
-          .from("courses")
-          .select(selectColumns)
-          .or(`id.eq.${courseId},code.eq.${courseId}`)
-          .maybeSingle()
+        // Fetch course and resources via API
+        const courseRes = await fetch(`/api/courses/${courseId}`)
 
-        let courseData = courseExact
-
-        if (!courseData) {
-          const { data: courseByCode } = await supabase
-            .from("courses")
-            .select(selectColumns)
-            .ilike("code", courseId)
-            .maybeSingle()
-
-          courseData = courseByCode || null
-        }
-
-        if (!courseData) {
+        if (!courseRes.ok) {
           // Fallback: show a lightweight page using the URL code
           const fallbackCourse: Course = {
             id: courseId,
@@ -136,21 +121,9 @@ export default function CoursePage() {
           return
         }
 
-        const courseIdValue = courseData.id ?? courseData.code ?? courseId
-
-        const { data: resourceData, error: resourceErr } = await supabase
-          .from("resources")
-          .select("id, title, category, exam_type, year, created_at, download_count, average_rating, uploader_id, courses(code,name)")
-          .eq("course_id", courseIdValue)
-          .eq("status", "approved")
-          .order("created_at", { ascending: false })
-
-        if (resourceErr) {
-          setError("Unable to load resources")
-        }
-
-        setCourse(courseData as Course)
-        setResources((resourceData || []) as Resource[])
+        const data = await courseRes.json()
+        setCourse(data.course as Course)
+        setResources((data.resources || []) as Resource[])
       } catch {
         setError("Something went wrong")
       } finally {
@@ -238,7 +211,7 @@ export default function CoursePage() {
 
   const resourceCount = resources.length
   const contributorCount = new Set(resources.map((r) => r.uploader_id).filter(Boolean)).size
-  const departmentName = course.departments?.name || "Unknown Department"
+  const departmentName = course.dept_name || "Unknown Department"
 
   return (
     <div className="flex min-h-screen flex-col">

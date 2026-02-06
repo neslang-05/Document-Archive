@@ -16,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { createClient } from "@/lib/supabase/client"
 
 interface Department {
   id: string
@@ -52,19 +51,20 @@ export function DepartmentManager({ departments: initialDepartments }: Departmen
     if (!form.code.trim() || !form.name.trim()) return
 
     setIsLoading(true)
-    const supabase = createClient()
 
     if (editingDept) {
-      const { error } = await supabase
-        .from("departments")
-        .update({
+      const res = await fetch("/api/departments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingDept.id,
           code: form.code.trim().toUpperCase(),
           name: form.name.trim(),
           description: form.description.trim() || null,
-        })
-        .eq("id", editingDept.id)
+        }),
+      })
 
-      if (!error) {
+      if (res.ok) {
         setDepartments((prev) =>
           prev.map((d) =>
             d.id === editingDept.id
@@ -74,17 +74,18 @@ export function DepartmentManager({ departments: initialDepartments }: Departmen
         )
       }
     } else {
-      const { data, error } = await supabase
-        .from("departments")
-        .insert({
+      const res = await fetch("/api/departments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           code: form.code.trim().toUpperCase(),
           name: form.name.trim(),
           description: form.description.trim() || null,
-        })
-        .select()
-        .single()
+        }),
+      })
 
-      if (!error && data) {
+      if (res.ok) {
+        const data = await res.json()
         setDepartments((prev) => [...prev, data])
       }
     }
@@ -99,10 +100,9 @@ export function DepartmentManager({ departments: initialDepartments }: Departmen
       return
     }
 
-    const supabase = createClient()
-    const { error } = await supabase.from("departments").delete().eq("id", id)
+    const res = await fetch(`/api/departments?id=${id}`, { method: "DELETE" })
 
-    if (!error) {
+    if (res.ok) {
       setDepartments((prev) => prev.filter((d) => d.id !== id))
       router.refresh()
     }

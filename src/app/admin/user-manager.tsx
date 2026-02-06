@@ -13,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createClient } from "@/lib/supabase/client"
 import { formatDate } from "@/lib/utils"
 import type { UserRole } from "@/types/database"
 
@@ -43,14 +42,14 @@ export function UserManager({ users: initialUsers }: UserManagerProps) {
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
     setUpdatingUserId(userId)
-    const supabase = createClient()
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: newRole })
-      .eq("id", userId)
+    const res = await fetch("/api/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, role: newRole }),
+    })
 
-    if (!error) {
+    if (res.ok) {
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
       )

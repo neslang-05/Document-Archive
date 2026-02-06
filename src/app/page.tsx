@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { createClient } from "@/lib/supabase/server"
+import { getD1 } from "@/lib/db/d1"
 import { formatNumber } from "@/lib/utils"
 
 // Static skeleton components for instant loading
@@ -95,70 +95,69 @@ const categoryLabels: Record<string, string> = {
 }
 
 export default async function HomePage() {
-  const supabase = await createClient()
+  const db = getD1()
 
-  // Fetch all data in parallel with a single optimized query for courses with resource counts
+  // Fetch all stats in parallel using D1
   const [
-    { count: resourceCount },
-    { data: downloadData },
-    { count: userCount },
-    { count: courseCount },
-    { data: recentResources },
-    { data: courses }
+    resourceCountResult,
+    downloadResult,
+    userCountResult,
+    courseCountResult,
+    recentResourcesResult,
+    coursesResult
   ] = await Promise.all([
-    supabase.from('resources').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
-    supabase.from('resources').select('download_count').eq('status', 'approved'),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }),
-    supabase.from('courses').select('*', { count: 'exact', head: true }),
-    // Fetch recent resources
-    supabase
-      .from('resources')
-      .select(`
-        id,
-        title,
-        category,
-        year,
-        download_count,
-        average_rating,
-        courses (
-          code,
-          name
-        )
-      `)
-      .eq('status', 'approved')
-      .order('created_at', { ascending: false })
-      .limit(3),
-    // Fetch courses (we'll use a simpler approach for counts)
-    supabase
-      .from('courses')
-      .select('id, code, name, semester')
-      .limit(4)
+    db.prepare("SELECT COUNT(*) as count FROM resources WHERE status = 'approved'").first<{ count: number }>(),
+    db.prepare("SELECT SUM(download_count) as total FROM resources WHERE status = 'approved'").first<{ total: number }>(),
+    db.prepare("SELECT COUNT(*) as count FROM profiles").first<{ count: number }>(),
+    db.prepare("SELECT COUNT(*) as count FROM courses").first<{ count: number }>(),
+    db.prepare(`
+      SELECT r.id, r.title, r.category, r.year, r.download_count, r.average_rating,
+             c.code as course_code, c.name as course_name
+      FROM resources r
+      LEFT JOIN courses c ON r.course_id = c.id
+      WHERE r.status = 'approved'
+      ORDER BY r.created_at DESC
+      LIMIT 3
+    `).all<{
+      id: string; title: string; category: string; year: number;
+      download_count: number; average_rating: number;
+      course_code: string; course_name: string;
+    }>(),
+    db.prepare("SELECT id, code, name, semester FROM courses LIMIT 4").all<{
+      id: string; code: string; name: string; semester: number;
+    }>(),
   ])
 
-  const totalDownloads = downloadData?.reduce((sum, item) => sum + (item.download_count || 0), 0) || 0
+  const resourceCount = resourceCountResult?.count || 0
+  const totalDownloads = downloadResult?.total || 0
+  const userCount = userCountResult?.count || 0
+  const courseCount = courseCountResult?.count || 0
+  const recentResources = recentResourcesResult?.results || []
+  const courses = coursesResult?.results || []
 
   const stats = [
-    { label: "Resources", value: formatNumber(resourceCount || 0), icon: FileText },
+    { label: "Resources", value: formatNumber(resourceCount), icon: FileText },
     { label: "Downloads", value: formatNumber(totalDownloads), icon: Download },
-    { label: "Users", value: formatNumber(userCount || 0), icon: Users },
-    { label: "Courses", value: formatNumber(courseCount || 0), icon: BookOpen },
+    { label: "Users", value: formatNumber(userCount), icon: Users },
+    { label: "Courses", value: formatNumber(courseCount), icon: BookOpen },
   ]
 
-  // Get resource counts for courses in a single query using aggregation
-  const courseIds = (courses || []).map(c => c.id)
-  const { data: resourceCounts } = await supabase
-    .from('resources')
-    .select('course_id')
-    .eq('status', 'approved')
-    .in('course_id', courseIds)
+  // Get resource counts for courses
+  const courseIds = courses.map(c => c.id)
+  let countMap: Record<string, number> = {}
+  if (courseIds.length > 0) {
+    const placeholders = courseIds.map(() => '?').join(',')
+    const { results: resourceCounts } = await db
+      .prepare(`SELECT course_id, COUNT(*) as count FROM resources WHERE status = 'approved' AND course_id IN (${placeholders}) GROUP BY course_id`)
+      .bind(...courseIds)
+      .all<{ course_id: string; count: number }>()
+    countMap = (resourceCounts || []).reduce((acc, r) => {
+      acc[r.course_id] = r.count
+      return acc
+    }, {} as Record<string, number>)
+  }
 
-  // Count resources per course
-  const countMap = (resourceCounts || []).reduce((acc, r) => {
-    acc[r.course_id] = (acc[r.course_id] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
-
-  const coursesWithCounts = (courses || []).map(course => ({
+  const coursesWithCounts = courses.map(course => ({
     ...course,
     resourceCount: countMap[course.id] || 0
   }))
@@ -306,7 +305,7 @@ export default async function HomePage() {
                           <h3 className="font-medium">{resource.title}</h3>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="font-mono text-xs text-muted-foreground">
-                              {resource.courses?.code}
+                              {resource.course_code}
                             </span>
                             <Badge 
                               variant="secondary" 

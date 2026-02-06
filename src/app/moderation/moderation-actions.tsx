@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/lib/supabase/client"
 import { FilePreview } from "@/components/preview/file-preview"
 import type { ResourceFile } from "@/types/database"
 
@@ -33,22 +32,16 @@ export function ModerationActions({ resourceId, files = [] }: ModerationActionsP
 
   const handleApprove = async () => {
     setIsApproving(true)
-    const supabase = createClient()
 
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const { error } = await supabase
-      .from("resources")
-      .update({
-        status: "approved",
-        approved_by: user?.id,
-        approved_at: new Date().toISOString(),
-      })
-      .eq("id", resourceId)
+    const res = await fetch(`/api/resources/${resourceId}/moderate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    })
 
     setIsApproving(false)
 
-    if (!error) {
+    if (res.ok) {
       router.refresh()
     }
   }
@@ -57,24 +50,20 @@ export function ModerationActions({ resourceId, files = [] }: ModerationActionsP
     if (!rejectionReason.trim()) return
 
     setIsRejecting(true)
-    const supabase = createClient()
 
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const { error } = await supabase
-      .from("resources")
-      .update({
-        status: "rejected",
-        approved_by: user?.id,
-        approved_at: new Date().toISOString(),
-        rejection_reason: rejectionReason.trim(),
-      })
-      .eq("id", resourceId)
+    const res = await fetch(`/api/resources/${resourceId}/moderate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "reject",
+        rejectionReason: rejectionReason.trim(),
+      }),
+    })
 
     setIsRejecting(false)
     setRejectDialogOpen(false)
 
-    if (!error) {
+    if (res.ok) {
       router.refresh()
     }
   }

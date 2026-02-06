@@ -1,19 +1,24 @@
 "use client"
 
-import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { useState, useCallback } from "react"
+import { auth, sendPasswordResetEmail } from "@/lib/firebase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
+import { TurnstileWidget } from "@/components/ui/turnstile"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
-  const supabase = createClient()
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+
+  const handleTurnstileVerify = useCallback((token: string) => {
+    setTurnstileToken(token)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,14 +26,18 @@ export default function ForgotPasswordPage() {
     setMessage("")
     setError("")
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/settings/reset-password`,
-    })
+    if (!turnstileToken) {
+      setError("Please complete the verification challenge")
+      setLoading(false)
+      return
+    }
 
-    if (error) {
-      setError(error.message)
-    } else {
+    try {
+      await sendPasswordResetEmail(auth, email)
       setMessage("Check your email for the password reset link")
+    } catch (err) {
+      const firebaseError = err as { message?: string }
+      setError(firebaseError.message || "Failed to send reset email")
     }
     setLoading(false)
   }
@@ -58,6 +67,8 @@ export default function ForgotPasswordPage() {
 
           {error && <p className="text-sm text-destructive">{error}</p>}
           {message && <p className="text-sm text-green-600">{message}</p>}
+
+          <TurnstileWidget onVerify={handleTurnstileVerify} className="flex justify-center" />
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Sending link..." : "Send Reset Link"}

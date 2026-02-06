@@ -6,9 +6,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { createClient } from "@/lib/supabase/server"
+import { getD1 } from "@/lib/db/d1"
 import { formatDate, formatNumber } from "@/lib/utils"
-import type { ResourceCategory } from "@/types/database"
 
 const categoryLabels: Record<string, string> = {
   question_paper: "Question Paper",
@@ -26,49 +25,46 @@ const categoryColors: Record<string, string> = {
 
 type SearchParams = Promise<{ q?: string; category?: string; semester?: string }>
 
-type ResourceWithCourse = {
-  id: string
-  title: string
-  category: keyof typeof categoryLabels
-  year: number
-  download_count: number | null
-  average_rating: number | null
-  rating_count: number | null
-  created_at: string
-  courses: {
-    id: string
-    code: string
-    name: string
-    semester: number | null
-  } | null
-}
-
 export default async function ResourcesPage({ searchParams }: { searchParams: SearchParams }) {
   const { q = "", category, semester } = await searchParams
-  const supabase = await createClient()
+  const db = getD1()
 
-  let query = supabase
-    .from("resources")
-    .select(
-      `id, title, category, year, download_count, average_rating, rating_count, created_at, courses!inner(id, code, name, semester)`
-    )
-    .eq("status", "approved")
-    .order("created_at", { ascending: false })
+  // Build dynamic query
+  const conditions: string[] = ["r.status = 'approved'"]
+  const bindings: (string | number)[] = []
 
   if (q) {
-    query = query.ilike("title", `%${q}%`)
+    conditions.push("r.title LIKE ?")
+    bindings.push(`%${q}%`)
   }
 
   if (category) {
-    query = query.eq("category", category as ResourceCategory)
+    conditions.push("r.category = ?")
+    bindings.push(category)
   }
 
   if (semester) {
-    query = query.eq("courses.semester", Number(semester))
+    conditions.push("c.semester = ?")
+    bindings.push(Number(semester))
   }
 
-  const { data, error } = await query.limit(50)
-  const resources: ResourceWithCourse[] = data || []
+  const whereClause = conditions.join(" AND ")
+
+  const { results } = await db
+    .prepare(`
+      SELECT r.id, r.title, r.category, r.year, r.download_count, r.average_rating,
+             r.rating_count, r.created_at, c.id as course_id, c.code as course_code,
+             c.name as course_name, c.semester as course_semester
+      FROM resources r
+      INNER JOIN courses c ON r.course_id = c.id
+      WHERE ${whereClause}
+      ORDER BY r.created_at DESC
+      LIMIT 50
+    `)
+    .bind(...bindings)
+    .all()
+
+  const resources = results || []
   const filtersApplied = Boolean(q || category || semester)
 
   return (
@@ -152,15 +148,7 @@ export default async function ResourcesPage({ searchParams }: { searchParams: Se
         </section>
 
         <section className="container mx-auto px-4 py-10">
-          {error && (
-            <Card className="mb-6 border-destructive/50 bg-destructive/5">
-              <CardContent className="py-4 text-destructive">
-                There was a problem loading resources. Please try again.
-              </CardContent>
-            </Card>
-          )}
-
-          {resources.length === 0 && !error && (
+          {resources.length === 0 && (
             <Card className="text-center">
               <CardContent className="space-y-4 py-10">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
@@ -202,8 +190,8 @@ export default async function ResourcesPage({ searchParams }: { searchParams: Se
                         {categoryLabels[resource.category]}
                       </Badge>
                       <span className="font-mono text-xs text-muted-foreground">{resource.year}</span>
-                      {resource.courses?.semester && (
-                        <span className="text-xs text-muted-foreground">Semester {resource.courses.semester}</span>
+                      {resource.course_semester && (
+                        <span className="text-xs text-muted-foreground">Semester {resource.course_semester}</span>
                       )}
                     </div>
                     <Link href={`/resources/${resource.id}`} className="block">
@@ -212,14 +200,14 @@ export default async function ResourcesPage({ searchParams }: { searchParams: Se
                       </h3>
                     </Link>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                      {resource.courses && (
+                      {resource.course_id && (
                         <Link
-                          href={`/courses/${resource.courses.id}`}
+                          href={`/courses/${resource.course_id}`}
                           className="inline-flex items-center gap-1 rounded bg-muted px-2 py-1 font-mono text-xs hover:text-foreground"
                         >
-                          <span>{resource.courses.code}</span>
+                          <span>{resource.course_code}</span>
                           <span>•</span>
-                          <span>{resource.courses.name}</span>
+                          <span>{resource.course_name}</span>
                         </Link>
                       )}
                       <span>Added {formatDate(resource.created_at)}</span>
