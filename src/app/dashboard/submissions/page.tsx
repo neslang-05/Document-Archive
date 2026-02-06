@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth/session"
-import { getD1 } from "@/lib/db/d1"
+import { getD1, type ResourceRow } from "@/lib/db/d1"
 import { redirect } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,8 +30,8 @@ export default async function SubmissionsPage() {
       WHERE r.uploader_id = ?
       ORDER BY r.created_at DESC
     `)
-    .bind(currentUser.uid)
-    .all()
+    .bind(currentUser.firebaseUser.uid)
+    .all<ResourceRow & { course_code: string | null; course_name: string | null }>()
 
   return (
     <div className="p-4 md:p-6 space-y-6">

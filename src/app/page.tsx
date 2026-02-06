@@ -1,5 +1,4 @@
 import Link from "next/link"
-import dynamic from "next/dynamic"
 import { Suspense } from "react"
 import { 
   BookOpen, 
@@ -20,6 +19,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { getD1 } from "@/lib/db/d1"
 import { formatNumber } from "@/lib/utils"
+
+export const dynamic = "force-dynamic"
 
 // Static skeleton components for instant loading
 function StatsSkeleton() {

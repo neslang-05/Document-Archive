@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { getD1 } from "@/lib/db/d1"
 import { formatDate, formatNumber } from "@/lib/utils"
 
+export const dynamic = "force-dynamic"
+
 const categoryLabels: Record<string, string> = {
   question_paper: "Question Paper",
   notes: "Notes",

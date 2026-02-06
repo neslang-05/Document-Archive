@@ -14,6 +14,11 @@ export async function getCurrentUser(): Promise<{
   firebaseUser: DecodedIdToken
   profile: ProfileRow
 } | null> {
+  // Return null during static generation/build to avoid "Dynamic server usage" errors
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return null
+  }
+  
   try {
     const cookieStore = await cookies()
     const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value

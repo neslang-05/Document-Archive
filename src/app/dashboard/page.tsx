@@ -7,6 +7,8 @@ import { formatNumber, formatDate } from "@/lib/utils"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 
+export const dynamic = "force-dynamic"
+
 export default async function DashboardPage() {
   const currentUser = await getCurrentUser()
   

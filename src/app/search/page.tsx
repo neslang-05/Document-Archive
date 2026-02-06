@@ -8,6 +8,8 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
+export const dynamic = "force-dynamic"
+
 export default async function SearchPage({
   searchParams,
 }: {
@@ -17,8 +19,8 @@ export default async function SearchPage({
   const query = q || ""
   const db = getD1()
 
-  let resources: Array<Record<string, unknown>> = []
-  let courses: Array<Record<string, unknown>> = []
+  let resources: any[] = []
+  let courses: any[] = []
 
   if (query) {
     const [resourcesResult, coursesResult] = await Promise.all([

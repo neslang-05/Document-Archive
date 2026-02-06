@@ -33,7 +33,7 @@ export default async function BookmarksPage() {
       WHERE b.user_id = ?
       ORDER BY b.created_at DESC
     `)
-    .bind(currentUser.uid)
+    .bind(currentUser.firebaseUser.uid)
     .all()
 
   return (

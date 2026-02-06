@@ -15,6 +15,8 @@ import { DepartmentManager } from "./department-manager"
 import { CourseManager } from "./course-manager"
 import { UserManager } from "./user-manager"
 
+export const dynamic = "force-dynamic"
+
 export default async function AdminPage() {
   const currentUser = await getCurrentUser()
 

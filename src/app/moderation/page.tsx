@@ -17,6 +17,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { formatDate } from "@/lib/utils"
 import { ModerationActions } from "./moderation-actions"
 
+export const dynamic = "force-dynamic"
+
 const categoryLabels: Record<string, string> = {
   question_paper: "Question Paper",
   notes: "Notes",
@@ -80,8 +82,8 @@ export default async function ModerationPage() {
     .all()
 
   // Fetch files for all pending submissions
-  const pendingIds = (pendingSubmissions || []).map((s: Record<string, unknown>) => s.id as string)
-  let allFiles: Record<string, unknown>[] = []
+  const pendingIds = (pendingSubmissions || []).map((s: any) => s.id as string)
+  let allFiles: any[] = []
   if (pendingIds.length > 0) {
     const placeholders = pendingIds.map(() => '?').join(',')
     const { results } = await db

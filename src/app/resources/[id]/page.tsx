@@ -19,6 +19,8 @@ import { Separator } from "@/components/ui/separator"
 import { formatDate, formatNumber } from "@/lib/utils"
 import { ResourceActions } from "@/components/resource/resource-actions"
 
+export const dynamic = "force-dynamic"
+
 const categoryLabels: Record<string, string> = {
   question_paper: "Question Paper",
   notes: "Notes",
@@ -61,7 +63,7 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
       WHERE r.id = ?
     `)
     .bind(id)
-    .first<Record<string, unknown>>()
+    .first<any>()
 
   if (!resource) {
     notFound()
@@ -72,7 +74,7 @@ export default async function ResourcePage({ params }: { params: Promise<{ id: s
     if (!currentUser) {
       redirect("/auth/login")
     }
-    if (resource.uploader_id !== currentUser.uid) {
+    if (resource.uploader_id !== currentUser.firebaseUser.uid) {
       redirect("/dashboard")
     }
   }
