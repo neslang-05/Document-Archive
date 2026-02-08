@@ -80,7 +80,7 @@ export const metadata: Metadata = {
     ],
     shortcut: "/logo.ico",
     apple: [
-      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/icons/icon-144x144.png", sizes: "144x144", type: "image/png" },
     ],
     other: [
       {
@@ -120,7 +120,7 @@ export default function RootLayout({
         
         <link rel="icon" href="/logo.ico" type="image/x-icon" />
         <link rel="alternate icon" href="/logo.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" href="/icons/icon-144x144.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="mobile-web-app-capable" content="yes" />

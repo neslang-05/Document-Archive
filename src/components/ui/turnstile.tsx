@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Script from "next/script"
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""
 
@@ -24,26 +25,6 @@ export function TurnstileWidget({
   const containerRef = useRef<HTMLDivElement>(null)
   const widgetIdRef = useRef<string | null>(null)
   const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    // Load Turnstile script if not already loaded
-    if (!document.getElementById("turnstile-script")) {
-      const script = document.createElement("script")
-      script.id = "turnstile-script"
-      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad"
-      script.async = true
-      script.defer = true
-
-      // Set up the callback
-      ;(window as unknown as Record<string, unknown>).onTurnstileLoad = () => {
-        setLoaded(true)
-      }
-
-      document.head.appendChild(script)
-    } else if ((window as unknown as Record<string, { render: unknown }>).turnstile) {
-      setLoaded(true)
-    }
-  }, [])
 
   useEffect(() => {
     if (!loaded || !containerRef.current || !SITE_KEY) return
@@ -77,7 +58,18 @@ export function TurnstileWidget({
     return null
   }
 
-  return <div ref={containerRef} className={className} />
+  return (
+    <>
+      <Script
+        id="turnstile-script"
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        onLoad={() => {
+          setLoaded(true)
+        }}
+      />
+      <div ref={containerRef} className={className} />
+    </>
+  )
 }
 
 interface TurnstileAPI {
