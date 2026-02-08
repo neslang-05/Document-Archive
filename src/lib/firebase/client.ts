@@ -64,6 +64,11 @@ export async function setSessionCookie(): Promise<boolean> {
     body: JSON.stringify({ idToken: token }),
   })
 
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}))
+    throw new Error(errorData.error || "Failed to establish session")
+  }
+
   return res.ok
 }
 
@@ -86,7 +91,11 @@ export async function loginWithEmail(email: string, pass: string, turnstileToken
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ turnstileToken }),
     })
-    if (!res.ok) throw new Error("Failed to sync profile")
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to sync profile")
+    }
   }
   return result
 }
@@ -103,7 +112,11 @@ export async function loginWithGoogle(turnstileToken?: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ turnstileToken: turnstileToken || "google-oauth" }),
     })
-    if (!res.ok) throw new Error("Failed to sync profile")
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to sync profile")
+    }
   }
   return result
 }
@@ -123,7 +136,11 @@ export async function signupWithEmail(email: string, pass: string, fullName: str
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ turnstileToken, fullName }),
     })
-    if (!res.ok) throw new Error("Failed to sync profile")
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to sync profile")
+    }
   }
   return result
 }

@@ -4,32 +4,48 @@ import { getAuth, type DecodedIdToken } from "firebase-admin/auth"
 let adminApp: App
 
 function getAdminApp(): App {
-  if (getApps().length === 0) {
-    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
-    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
-    const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY
+  // Check if we already have the app initialized
+  const apps = getApps()
+  if (apps.length > 0) {
+    const existing = apps.find(a => a.name === "[DEFAULT]") || apps[0]
+    if (existing.name !== "build-time-app") return existing
+  }
 
-    if (!projectId || !clientEmail || !privateKey) {
-      // During build time or if config is missing, return a dummy initialization
-      // to prevent the process from crashing
-      adminApp = initializeApp({
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY
+
+  if (!projectId || !clientEmail || !privateKey) {
+    // During build time, return a dummy initialization
+    if (process.env.NEXT_PHASE === 'phase-production-build' || process.env.NODE_ENV === 'production') {
+      return initializeApp({
         credential: cert({
           projectId: "dummy-project",
           clientEmail: "dummy@example.com",
           privateKey: "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQ\n-----END PRIVATE KEY-----\n",
         }),
       }, "build-time-app")
-    } else {
-      adminApp = initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey: privateKey.replace(/\\n/g, "\n"),
-        }),
-      })
     }
+    
+    // In development/runtime, missing vars is a fatal error
+    const missing = []
+    if (!projectId) missing.push("FIREBASE_ADMIN_PROJECT_ID")
+    if (!clientEmail) missing.push("FIREBASE_ADMIN_CLIENT_EMAIL")
+    if (!privateKey) missing.push("FIREBASE_ADMIN_PRIVATE_KEY")
+    
+    console.error(`Firebase Admin SDK variables missing: ${missing.join(", ")}`)
+    throw new Error(`Firebase Admin SDK not configured. Missing: ${missing.join(", ")}`)
   }
-  return adminApp || getApps()[0]
+
+  adminApp = initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey: privateKey.replace(/\\n/g, "\n"),
+    }),
+  })
+  
+  return adminApp
 }
 
 /**

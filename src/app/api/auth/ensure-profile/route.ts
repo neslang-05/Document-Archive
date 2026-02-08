@@ -28,18 +28,23 @@ export async function POST(request: NextRequest) {
     if (body.turnstileToken !== "google-oauth") {
       const isValid = await verifyTurnstileToken(body.turnstileToken)
       if (!isValid) {
-        return NextResponse.json({ error: "Invalid Turnstile token" }, { status: 403 })
+        return NextResponse.json({ error: "Invalid Turnstile challenge. Please try again." }, { status: 403 })
       }
     }
 
     // Upsert the profile in D1
     const db = getD1()
-    await upsertProfile(db, {
-      id: decoded.uid,
-      email: decoded.email || "",
-      full_name: body.fullName || decoded.name || undefined,
-      avatar_url: decoded.picture || undefined,
-    })
+    try {
+      await upsertProfile(db, {
+        id: decoded.uid,
+        email: decoded.email || "",
+        full_name: body.fullName || decoded.name || undefined,
+        avatar_url: decoded.picture || undefined,
+      })
+    } catch (dbError) {
+      console.error("D1 Profile Update Error:", dbError)
+      return NextResponse.json({ error: "Failed to update user profile in database." }, { status: 500 })
+    }
 
     return NextResponse.json({ status: "ok", uid: decoded.uid })
   } catch (error) {
