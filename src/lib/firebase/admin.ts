@@ -5,13 +5,29 @@ let adminApp: App
 
 function getAdminApp(): App {
   if (getApps().length === 0) {
-    adminApp = initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-    })
+    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
+    const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY
+
+    if (!projectId || !clientEmail || !privateKey) {
+      // During build time or if config is missing, return a dummy initialization
+      // to prevent the process from crashing
+      adminApp = initializeApp({
+        credential: cert({
+          projectId: "dummy-project",
+          clientEmail: "dummy@example.com",
+          privateKey: "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQ\n-----END PRIVATE KEY-----\n",
+        }),
+      }, "build-time-app")
+    } else {
+      adminApp = initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey: privateKey.replace(/\\n/g, "\n"),
+        }),
+      })
+    }
   }
   return adminApp || getApps()[0]
 }

@@ -19,7 +19,10 @@ const firebaseConfig = {
 }
 
 // Initialize Firebase (singleton)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+// Use dummy values if keys are missing to prevent build errors
+const app = getApps().length === 0 
+  ? initializeApp(firebaseConfig.apiKey ? firebaseConfig : { apiKey: "build-dummy-key", authDomain: "dummy", projectId: "dummy" }) 
+  : getApp()
 const auth = getAuth(app)
 const googleProvider = new GoogleAuthProvider()
 

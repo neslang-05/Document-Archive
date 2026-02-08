@@ -44,17 +44,24 @@ export interface D1PreparedStatement {
 export function getD1(): D1Database {
   // When running on Cloudflare Pages, use the binding from next-on-pages
   try {
-    // Dynamic import to avoid build errors when not on Cloudflare
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getRequestContext } = require("@cloudflare/next-on-pages")
-    const { env } = getRequestContext()
-    if (!env || !env.DB) {
-      throw new Error("No DB binding found")
+    // Only attempt to use @cloudflare/next-on-pages in production and when not on Vercel
+    if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
+      // Dynamic require to avoid build errors when not on Cloudflare
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getRequestContext } = require("@cloudflare/next-on-pages")
+      const { env } = getRequestContext()
+      if (env && env.DB) {
+        return env.DB as D1Database
+      }
     }
-    return env.DB as D1Database
+    
+    throw new Error("No DB binding found")
   } catch (err) {
     // Fallback for build time or local environment without wrangler
-    console.warn("D1 binding not found, using mock. This is normal during build time.")
+    // We only log this in dev to avoid noise in production build logs
+    if (process.env.NODE_ENV === 'development') {
+      console.warn("D1 binding not found, using mock.")
+    }
     
     const mockResult = { results: [], success: true, meta: { changes: 0, last_row_id: 0, duration: 0 } }
     const mockStatement = {
