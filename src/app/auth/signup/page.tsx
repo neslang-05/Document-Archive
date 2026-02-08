@@ -10,11 +10,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator"
 import {
   auth,
-  googleProvider,
-  createUserWithEmailAndPassword,
-  signInWithPopup,
-  updateProfile,
-  setSessionCookie,
+  signupWithEmail,
+  loginWithGoogle,
 } from "@/lib/firebase/client"
 import { TurnstileWidget } from "@/components/ui/turnstile"
 import { useRouter } from "next/navigation"
@@ -59,26 +56,7 @@ export default function SignupPage() {
     }
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-      
-      // Set display name
-      if (userCredential.user && fullName) {
-        await updateProfile(userCredential.user, { displayName: fullName })
-      }
-
-      // Set session cookie
-      await setSessionCookie()
-
-      // Create profile in D1
-      await fetch("/api/auth/ensure-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          turnstileToken,
-          fullName,
-        }),
-      })
-
+      await signupWithEmail(email, password, fullName, turnstileToken)
       setSuccess(true)
     } catch (err) {
       const firebaseError = err as { code?: string; message?: string }
@@ -98,19 +76,9 @@ export default function SignupPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const result = await signInWithPopup(auth, googleProvider)
-      if (result.user) {
-        await setSessionCookie()
-
-        await fetch("/api/auth/ensure-profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ turnstileToken: turnstileToken || "google-oauth" }),
-        })
-
-        router.push("/dashboard")
-        router.refresh()
-      }
+      await loginWithGoogle(turnstileToken || "google-oauth")
+      router.push("/dashboard")
+      router.refresh()
     } catch (err) {
       const firebaseError = err as { message?: string }
       setError(firebaseError.message || "An unexpected error occurred. Please try again.")

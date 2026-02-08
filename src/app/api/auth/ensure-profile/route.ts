@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/firebase/admin"
 import { getD1, upsertProfile } from "@/lib/db/d1"
+import { verifyTurnstileToken } from "@/lib/turnstile"
 
 /**
  * POST /api/auth/ensure-profile
@@ -22,6 +23,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}))
+
+    // Verify Turnstile token
+    if (body.turnstileToken !== "google-oauth") {
+      const isValid = await verifyTurnstileToken(body.turnstileToken)
+      if (!isValid) {
+        return NextResponse.json({ error: "Invalid Turnstile token" }, { status: 403 })
+      }
+    }
 
     // Upsert the profile in D1
     const db = getD1()

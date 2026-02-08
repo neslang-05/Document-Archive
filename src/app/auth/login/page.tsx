@@ -11,10 +11,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator"
 import {
   auth,
-  googleProvider,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  setSessionCookie,
+  googleProvider, // For SVG if needed, but we use helpers now
+  loginWithEmail,
+  loginWithGoogle,
 } from "@/lib/firebase/client"
 import { TurnstileWidget } from "@/components/ui/turnstile"
 
@@ -43,21 +42,9 @@ export default function LoginPage() {
     }
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      if (userCredential.user) {
-        // Set session cookie for server-side auth
-        await setSessionCookie()
-
-        // Ensure profile exists in D1 (via API)
-        await fetch("/api/auth/ensure-profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ turnstileToken }),
-        })
-
-        router.push("/dashboard")
-        router.refresh()
-      }
+      await loginWithEmail(email, password, turnstileToken)
+      router.push("/dashboard")
+      router.refresh()
     } catch (err) {
       const firebaseError = err as { code?: string; message?: string }
       if (firebaseError.code === "auth/invalid-credential") {
@@ -76,19 +63,9 @@ export default function LoginPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const result = await signInWithPopup(auth, googleProvider)
-      if (result.user) {
-        await setSessionCookie()
-
-        await fetch("/api/auth/ensure-profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ turnstileToken: turnstileToken || "google-oauth" }),
-        })
-
-        router.push("/dashboard")
-        router.refresh()
-      }
+      await loginWithGoogle(turnstileToken || "google-oauth")
+      router.push("/dashboard")
+      router.refresh()
     } catch (err) {
       const firebaseError = err as { message?: string }
       setError(firebaseError.message || "An unexpected error occurred. Please try again.")
@@ -227,6 +204,8 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            <TurnstileWidget onVerify={handleTurnstileVerify} className="flex justify-center" />
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (

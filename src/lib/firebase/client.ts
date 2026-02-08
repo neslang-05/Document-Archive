@@ -73,3 +73,48 @@ export async function setSessionCookie(): Promise<boolean> {
 export async function clearSessionCookie(): Promise<void> {
   await fetch("/auth/session", { method: "DELETE" })
 }
+
+/**
+ * Perform a full login flow: sign in with Firebase, set session cookie, and ensure profile exists.
+ */
+export async function loginWithEmail(email: string, pass: string, turnstileToken: string) {
+  const result = await signInWithEmailAndPassword(auth, email, pass)
+  if (result.user) {
+    await setSessionCookie()
+    const res = await fetch("/api/auth/ensure-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turnstileToken }),
+    })
+    if (!res.ok) throw new Error("Failed to sync profile")
+  }
+  return result
+}
+
+/**
+ * Perform a full Google login flow.
+ */
+    if (!res.ok) throw new Error("Failed to sync profile")
+  }
+  return result
+}
+
+/**
+ * Perform a full Signup flow.
+ */
+export async function signupWithEmail(email: string, pass: string, fullName: string, turnstileToken: string) {
+  const result = await createUserWithEmailAndPassword(auth, email, pass)
+  if (result.user) {
+    if (fullName) {
+      await updateProfile(result.user, { displayName: fullName })
+    }
+    await setSessionCookie()
+    const res = await fetch("/api/auth/ensure-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turnstileToken, fullName }),
+    })
+    if (!res.ok) throw new Error("Failed to sync profile")
+  }
+  return result
+}
