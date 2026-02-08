@@ -46,9 +46,10 @@ export function getD1(): D1Database {
   try {
     // Only attempt to use @cloudflare/next-on-pages in production and when not on Vercel
     if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
-      // Dynamic require to avoid build errors when not on Cloudflare
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getRequestContext } = require("@cloudflare/next-on-pages")
+      // Use eval('require') to prevent Turbopack from trying to resolve this at build time
+      // as it's only available in the Cloudflare Pages environment
+      const req = eval('require');
+      const { getRequestContext } = req("@cloudflare/next-on-pages")
       const { env } = getRequestContext()
       if (env && env.DB) {
         return env.DB as D1Database

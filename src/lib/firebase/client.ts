@@ -94,6 +94,15 @@ export async function loginWithEmail(email: string, pass: string, turnstileToken
 /**
  * Perform a full Google login flow.
  */
+export async function loginWithGoogle(turnstileToken?: string) {
+  const result = await signInWithPopup(auth, googleProvider)
+  if (result.user) {
+    await setSessionCookie()
+    const res = await fetch("/api/auth/ensure-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turnstileToken: turnstileToken || "google-oauth" }),
+    })
     if (!res.ok) throw new Error("Failed to sync profile")
   }
   return result
